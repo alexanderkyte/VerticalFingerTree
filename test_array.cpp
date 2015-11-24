@@ -2,25 +2,29 @@
 #include "stdint.h"
 #include "assert.h"
 
-typedef const void * pointer;
+#include "iostream"
+
+typedef void const * pointer;
 typedef uint64_t bitmask;
 
 void
-pushInt(void)
+pushInts(void)
 {
-	const int foo = 100;
-	const int bar = 30;
-	const pointer data[] = {&foo, &bar};
+	const int affix = 100;
+	const int slop = 30;
 	auto arry = SuccinctArray<bitmask, pointer>::fromArray(nullptr, 0);
-	auto next = arry->setHeadLevel<2>(data);
-	auto both = next->getHeadLevel();
-	assert(std::get<0>(both) == &foo);
+	auto next = arry->setHeadLevel<2>({.affix = &affix, .slop = &slop});
+	const Level<pointer> both = next->getHeadLevel();
+	const pointer first = both.affix;
+	const pointer second = both.slop;
+	assert(both.affix == &affix);
+	assert(both.slop == &slop);
 }
 
 int 
 main(void) 
 {
-	pushInt();
+	pushInts();
 
 	return 0;
 }

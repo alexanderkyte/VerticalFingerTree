@@ -1,9 +1,14 @@
 #ifndef __FINGER_TREE_SUCC_ARRY
 #define __FINGER_TREE_SUCC_ARRY
 
-#include <tuple>
-#include <vector>
 #include <assert.h>
+#include <cstring>
+
+template <typename pointer>
+struct Level {
+	pointer affix;
+	pointer slop;
+};
 
 template <typename Bitmask, typename pointer>
 class SuccinctArray {
@@ -19,9 +24,9 @@ class SuccinctArray {
 
 		template <int state>
 		const SuccinctArray<Bitmask, pointer> *
-		setHeadLevel(const pointer added[]) const;
+		setHeadLevel(const Level<pointer> added) const;
 
-		const std::tuple<pointer, pointer>
+		const Level<pointer>
 		getHeadLevel(void) const;
 
 		const int
@@ -45,6 +50,9 @@ SuccinctArray<Bitmask, pointer>::fromArray(const pointer *unpacked, const int si
 	assert(sizeof(Bitmask) >= size);
 #endif
 
+	if(size == 0) {
+		return new SuccinctArray<Bitmask, pointer>(NULL, 0);
+	}
 	Bitmask mask = {0};
 	const int single_bit = 0x1;
 
@@ -124,7 +132,7 @@ constexpr int footprint(const int state) {
 	// If 0, return 0
 	// else return 2 if the value is even
 	// and 1 otherwise
-	return (state ? 0 : ((state % 2 == 0) ? 2 : 1) );
+	return (state ? ((state % 2 == 0) ? 2 : 1) : 0);
 }
 
 //
@@ -169,7 +177,7 @@ template <typename Bitmask, typename pointer>
 template <const int state>
 const SuccinctArray<Bitmask, pointer> *
 SuccinctArray<Bitmask, pointer>::setHeadLevel
-(const pointer added[]) const {
+(const Level<pointer> added) const {
 
 	const int total_size = __builtin_popcount(this->schema);
 	const int upper_start = __builtin_popcount(this->schema << 3);
@@ -180,8 +188,13 @@ SuccinctArray<Bitmask, pointer>::setHeadLevel
 	const int toCopy = footprint(state);
 
 	pointer *newVersion = new pointer[total_size - toSkip + toCopy];
-	memcpy(newVersion, data, toCopy);
-	memcpy(&newVersion[toCopy], this->data[toSkip], upper_size * sizeof(pointer));
+	if(added.slop){
+		newVersion[0] = added.slop;
+	}
+	if(added.affix){
+		newVersion[added.slop != NULL ? 1 : 0] = added.affix;
+	}
+	memcpy(&newVersion[toCopy], &this->data[toSkip], upper_size * sizeof(pointer));
 
 	// Mask out lower bits
 	const Bitmask withoutLower = (schema & ~0x7);
@@ -195,33 +208,33 @@ const int
 SuccinctArray<Bitmask, pointer>::getState(int level) const {
 	// Shift out lower levels, mask to move current level to head
 	const Bitmask base = (schema >> level) & 0x7;
-	const int threes = ( base & (0x1 << 3 )) ? 3 : 0;
-	const int twos = ( base & (0x1 << 2))  ? 2 : 0;
-	const int ones = (base & 0x1) ? 1 : 0;
-	return threes + twos + ones;
+	const int three_affix = (base & (0x1 << 2)) ? 3 : 0;
+	const int one_affix = (base & (0x1 << 1))  ? 1 : 0;
+	const int slop = (base & 0x1) ? 1 : 0;
+	return slop + one_affix + three_affix;
 }
 
 template <typename Bitmask, typename pointer>
-const std::tuple<pointer, pointer>
+const Level<pointer>
 SuccinctArray<Bitmask, pointer>::getHeadLevel(void) const {
 	const int state = getState(0);
 
 	switch(state) {
 		case 0:
-			return nullptr;
+			return {0};
 		case 1:
 			// Left is affix, right is slot
 			// This follows bitmask ordering, not array
 			// ordering
-			return new std::tuple<pointer, pointer>(nullptr, this->data[0]);
+			return {.affix = nullptr, .slop = this->data[0]};
 		case 2:
 		case 4:
-			return new std::tuple<pointer, pointer>(this->data[1], this->data[0]);
+			return {.affix = this->data[1], .slop = this->data[0]};
 		case 3:
-			return new std::tuple<pointer, pointer>(this->data[0], nullptr);
+			return {.affix = this->data[0], .slop = nullptr};
 		default:
 			assert(0 || "Not reached");
-			return nullptr;
+			return {0};
 	}
 }
 
