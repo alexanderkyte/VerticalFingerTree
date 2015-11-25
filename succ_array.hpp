@@ -8,6 +8,50 @@ template <typename pointer>
 struct Level {
 	pointer affix;
 	pointer slop;
+
+	inline Level<pointer>
+	add(bool left, int state, pointer element) const {
+		switch(state) {
+			case 0:
+				return {.slop = element};
+			case 1:
+				if(left) {
+					return {.affix = element, .slop = this->slop};
+				} else {
+					return {.affix = this->slop, .slop = element};
+				}
+			case 2: {
+				FingerNode *node;
+				if(left) {
+					node = new FingerNode(elem, this.affix, this.slop, elem);
+				} else {
+					node = new FingerNode(this.affix, this.slop, elem);
+				}
+				return {.affix = node};
+			}
+			case 3:
+				return {.affix = this->affix, .slop = element};
+			default: // case 4:
+				assert(0 && "I shouldn't be reached");
+		}
+	}
+
+	inline Level<pointer>
+	remove(bool left, int state) {
+		switch(state) {
+			case 2:
+				return {.slop = this->affix};
+			case 3:
+				if(left) {
+					return {.affix = this.affix.middle, .slop = this.affix.right};
+				} else {
+					return {.affix = this->affix.left, .slop = this.affix.middle};
+				}
+			case 4:
+				return {.affix = this->affix};
+			default: // case 0 and case 1
+				assert(0 && "I shouldn't be reached");
+	}
 };
 
 template <typename Bitmask, typename pointer>
@@ -78,25 +122,52 @@ SuccinctArray<Bitmask, pointer>::fromArray(const pointer *unpacked, const int si
 	return SuccinctArray<Bitmask, pointer>(data, mask);
 }
 
-//template <typename Bitmask, typename pointer>
-//const std::vector<pointer>
-//SuccinctArray<Bitmask, pointer>::unpack(void) const {
-	//const int totalSize = this->schema ? __builtin_clz(this->schema) : 0;
-	//const int packedSize = __builtin_popcount(this->schema);
+//
+// Start compile-time bitmask helpers
+//
 
-	//auto unpacked = new std::vector<pointer>(totalSize, nullptr);
+#define slop (0x1)
+#define one_affix (0x1 << 1)
+#define three_affix (0x1 << 3)
 
-	//for(int i=0; i < totalSize; i++) {
-		//// If this bit is set
-		//if(((this->schema >> i) & 0x1) == 0x1) {
-			//unpacked[i] = this->data[bottom_cursor];
-			//bottom_cursor++;
-		//}
-	//}
+template <typename Bitmask>
+// The bitmask for a given state
+constexpr Bitmask bitmaskFor(const int state) {
+	return (state == 1 ? one_affix : 0) |
+		(state == 2 ? (slop | one_affix) : 0) |
+		(state == 3 ? three_affix : 0) |
+		(state == 4 ? (slop | three_affix) : 0);
+}
 
-	//return unpacked;
-//}
+template <typename Bitmask>
+constexpr Bitmask
+stateRepeat(const int state) {
+	return stateRepeatTimes(bitmaskFor<Bitmask>(state), sizeof(Bitmask) / 3);
+}
 
+template <typename Bitmask>
+constexpr Bitmask
+stateRepeatTimes(const Bitmask state, const int num) {
+	return (state << (num * 3)) | stateRepeatTimes(state, num - 1);
+}
+
+template <typename Bitmask>
+// The bitmask for a given state
+constexpr int 
+state(const Bitmask bitmask) {
+	return (bitmask == one_affix ? 1 : 0) |
+		(bitmask == (slop | one_affix) ? 2 : 0) |
+		(bitmask == three_affix ? 3 : 0) |
+		(bitmask == (slop | three_affix) ? 4 : 0);
+}
+
+#undef slop
+#undef one_affix
+#undef three_affix
+
+//
+// End compile-time bitmask helpers
+//
 template <typename Bitmask, typename pointer>
 const SuccinctArray<Bitmask, pointer> *
 SuccinctArray<Bitmask, pointer>::offset(int level) const {
@@ -135,39 +206,29 @@ constexpr int footprint(const int state) {
 	return (state ? ((state % 2 == 0) ? 2 : 1) : 0);
 }
 
-//
-//
-//
+template <typename Bitmask, typename pointer>
+const inline SuccinctArray<Bitmask, pointer> *
+SuccinctArray<Bitmask, pointer>::parallelOverflow
+(const pointer elem, const bool left) const {
+	const Bitmask overflowMask = stateRepeat<Bitmask>(4);
+	const numOverflowLevels = __builtin_clz(overflow_mask ^ this->schema) / 3;
+	const Bitmask afterOverflowMask =
+		stateRepeatFor<Bitmask>(bitmaskFor<Bitmask>(state), numOverflowLevels);
+	
+	// Note zero indexing
+	const Level nonOverflowState = this->getState(numOverflowLevels);
+	const Level nonOverflow = this->getLevel(nonOverflowState numOverflowLevels);
+	const Level nonFuture = nonOverflow.add(left, nonOverflowState, elem);
 
-#define slop (0x1)
-#define one_affix (0x1 << 1)
-#define three_affix (0x1 << 3)
-
-template <typename Bitmask>
-// The bitmask for a given state
-constexpr Bitmask bitmaskFor(const int state) {
-	return (state == 1 ? one_affix : 0) |
-		(state == 2 ? (slop | one_affix) : 0) |
-		(state == 3 ? three_affix : 0) |
-		(state == 4 ? (slop | three_affix) : 0);
+	// Note: the new element becomes the level 0 slop,
+	// level N slop becomes level N 1-affix
+	// level N affix becomes level N+1 slop
+	//
+	// This means that we can memcpy the data segment
+	// of overflowing levels after the element, and then
+	// handle the one level after that which doesn't overflow
+	// and then memcpy the rest
 }
-
-template <typename Bitmask>
-// The bitmask for a given state
-constexpr int state(const Bitmask bitmask) {
-	return (bitmask == one_affix ? 1 : 0) |
-		(bitmask == (slop | one_affix) ? 2 : 0) |
-		(bitmask == three_affix ? 3 : 0) |
-		(bitmask == (slop | three_affix) ? 4 : 0);
-}
-
-#undef slop
-#undef one_affix
-#undef three_affix
-
-//
-//
-//
 
 // Observation: we only modify head except for
 // in overflow, and in that case we can append
@@ -206,7 +267,7 @@ template <typename Bitmask, typename pointer>
 const int
 SuccinctArray<Bitmask, pointer>::getState(int level) const {
 	// Shift out lower levels, mask to move current level to head
-	const Bitmask base = (schema >> level) & 0x7;
+	const Bitmask base = (schema >> (level * 3)) & 0x7;
 	const int three_affix = (base & (0x1 << 2)) ? 3 : 0;
 	const int one_affix = (base & (0x1 << 1))  ? 1 : 0;
 	const int slop = (base & 0x1) ? 1 : 0;
@@ -214,9 +275,16 @@ SuccinctArray<Bitmask, pointer>::getState(int level) const {
 }
 
 template <typename Bitmask, typename pointer>
-const Level<pointer>
-SuccinctArray<Bitmask, pointer>::getHeadLevel(void) const {
-	const int state = getState(0);
+const inline Level<pointer>
+SuccinctArray<Bitmask, pointer>::getLevel(int level, int state) const {
+	int tmp_off;
+	if(level != 0) {
+		tmp_off = __builtin_popcount(this->schema & (~0x1 << level * 3));
+	} else {
+		tmp_off = 0;
+	}
+
+	const int offset = tmp_off;
 
 	switch(state) {
 		case 0:
@@ -225,12 +293,12 @@ SuccinctArray<Bitmask, pointer>::getHeadLevel(void) const {
 			// Left is affix, right is slot
 			// This follows bitmask ordering, not array
 			// ordering
-			return {.slop = this->data[0]};
+			return {.slop = this->data[0 + offset]};
 		case 2:
 		case 4:
-			return {.affix = this->data[1], .slop = this->data[0]};
+			return {.affix = this->data[1 + offset], .slop = this->data[0 + offset]};
 		case 3:
-			return {.affix = this->data[0]};
+			return {.affix = this->data[0 + offset]};
 		default:
 			assert(0 && "Not reached");
 			return {0};
