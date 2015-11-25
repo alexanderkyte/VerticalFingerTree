@@ -19,12 +19,13 @@ class SuccinctArray {
 		SuccinctArray(pointer *payload, Bitmask mask): data(payload), schema(mask) {}
 
 	public:
-		const SuccinctArray *
+		SuccinctArray(void): data(nullptr), schema() {}
+
+		const SuccinctArray<Bitmask, pointer> *
 		append(const SuccinctArray *other) const;
 
-		template <int state>
 		const SuccinctArray<Bitmask, pointer> *
-		setHeadLevel(const Level<pointer> added) const;
+		setHeadLevel(const int, const pointer affix, const pointer slop) const;
 
 		const Level<pointer>
 		getHeadLevel(void) const;
@@ -32,11 +33,11 @@ class SuccinctArray {
 		const int
 		getState(int level) const;
 
-		const SuccinctArray *
+		const SuccinctArray<Bitmask, pointer> *
 		offset(int level) const;
 
 		static
-		const SuccinctArray *
+		const SuccinctArray<Bitmask, pointer>
 		fromArray(const pointer *unpacked, const int size);
 
 		//const std::vector<pointer>
@@ -44,14 +45,14 @@ class SuccinctArray {
 };
 
 template <typename Bitmask, typename pointer>
-const SuccinctArray<Bitmask, pointer> *
+const SuccinctArray<Bitmask, pointer>
 SuccinctArray<Bitmask, pointer>::fromArray(const pointer *unpacked, const int size) {
 #ifdef DEBUG
 	assert(sizeof(Bitmask) >= size);
 #endif
 
 	if(size == 0) {
-		return new SuccinctArray<Bitmask, pointer>(NULL, 0);
+		return SuccinctArray<Bitmask, pointer>(NULL, 0);
 	}
 	Bitmask mask = {0};
 	const int single_bit = 0x1;
@@ -74,8 +75,7 @@ SuccinctArray<Bitmask, pointer>::fromArray(const pointer *unpacked, const int si
 	}
 
 	// Data is fixed after this point
-
-	return new SuccinctArray<Bitmask, pointer>(data, mask);
+	return SuccinctArray<Bitmask, pointer>(data, mask);
 }
 
 //template <typename Bitmask, typename pointer>
@@ -174,10 +174,9 @@ constexpr int state(const Bitmask bitmask) {
 // the non-overflowing case onwards, with a simple
 // memcpy and bitshift
 template <typename Bitmask, typename pointer>
-template <const int state>
-const SuccinctArray<Bitmask, pointer> *
+const inline SuccinctArray<Bitmask, pointer> *
 SuccinctArray<Bitmask, pointer>::setHeadLevel
-(const Level<pointer> added) const {
+(const int state, const pointer affix, const pointer slop) const {
 
 	const int total_size = __builtin_popcount(this->schema);
 	const int upper_start = __builtin_popcount(this->schema << 3);
@@ -188,11 +187,11 @@ SuccinctArray<Bitmask, pointer>::setHeadLevel
 	const int toCopy = footprint(state);
 
 	pointer *newVersion = new pointer[total_size - toSkip + toCopy];
-	if(added.slop){
-		newVersion[0] = added.slop;
+	if(slop){
+		newVersion[0] = slop;
 	}
-	if(added.affix){
-		newVersion[added.slop != NULL ? 1 : 0] = added.affix;
+	if(affix){
+		newVersion[slop != NULL ? 1 : 0] = affix;
 	}
 	memcpy(&newVersion[toCopy], &this->data[toSkip], upper_size * sizeof(pointer));
 
@@ -226,14 +225,14 @@ SuccinctArray<Bitmask, pointer>::getHeadLevel(void) const {
 			// Left is affix, right is slot
 			// This follows bitmask ordering, not array
 			// ordering
-			return {.affix = nullptr, .slop = this->data[0]};
+			return {.slop = this->data[0]};
 		case 2:
 		case 4:
 			return {.affix = this->data[1], .slop = this->data[0]};
 		case 3:
-			return {.affix = this->data[0], .slop = nullptr};
+			return {.affix = this->data[0]};
 		default:
-			assert(0 || "Not reached");
+			assert(0 && "Not reached");
 			return {0};
 	}
 }

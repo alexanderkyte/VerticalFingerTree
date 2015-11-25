@@ -1,18 +1,19 @@
-#include "finger_tree.h"
+#include "finger_tree.hpp"
+#include <stdint.h>
 
 void
-pushInt(void)
+pushFingerInt(void)
 {
-	FingerTree *ftree = new FingerTree();
+	auto init = new FingerTree<int64_t>();
 	int test = 10;
-	ftree.pushLeft(&test);
-	int *result = ftree.popLeft();
+	auto filled = init->pushLeft((void **)&test);
+	int *result = (int *)filled->peekLeft();
 	assert(result == &test);
 }
 
 int 
 main(void) 
 {
-	pushInt();
-	return;
+	pushFingerInt();
+	return 0;
 }
