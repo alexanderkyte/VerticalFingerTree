@@ -56,57 +56,48 @@ class FingerTree {
 //
 template <typename Bitmask>
 const FingerTree<Bitmask> *
-FingerTree<Bitmask>::pushLeft(const pointer elem) const
+FingerTree<Bitmask>::push(const bool left, const pointer elem) const
 {
-	const int left_state = this->left.getState(0);
-	const int right_state = this->right.getState(0);
+	const SuccinctArray<Bitmask, pointer> near_tmp;
+	const SuccinctArray<Bitmask, pointer> far_tmp;
 
-	if(left_state == 0 && right_state < 2) {
-		switch(right_state) {
-			case 0: {
-				// Note, the funny address of syntax is to use
-				// the member function
-				const SuccinctArray<Bitmask, pointer> *newRight =
-					this->right.setHeadLevel(1, nullptr, elem);
+	if(left) {
+		near_tmp = this->left;
+		far_tmp = this->right;
+	} else {
+		far_tmp = this->left;
+		near_tmp = this->right;
+	}
 
-				return new FingerTree(&left, newRight);
-			}
-			case 1: {
-				Level<pointer> curr = this->right.getHeadLevel();
-				auto newRight = this->right.setHeadLevel(2, elem, curr.slop);
-				return new FingerTree(&left, newRight);
-			}
-			default:
-				assert(0 && "Should not be reached");
+	const SuccinctArray<Bitmask, pointer> near = near_tmp;
+	const SuccinctArray<Bitmask, pointer> far = far_tmp;
+
+	const int near_state = near.getState(0);
+	const int far_state = far.getState(0);
+
+	if(near_state == 0 && far_state < 2) {
+		SuccinctArray<Bitmask, pointer> *newFar;
+		const Level<pointer> curr = far.getHeadLevel();
+		const Level<pointer> next = curr.add(left, near_state, elem);
+		const auto newFar = near.setHeadLevel(far_state + 1, next);
+		if(left) {
+			return new FingerTree(near, newFar);
+		} else {
+			return new FingerTree(newFar, near);
 		}
 	} else {
-		switch(left_state) {
-			case 0: {
-				auto newLeft = this->left.setHeadLevel(1, nullptr, elem);
-				return new FingerTree(newLeft, &right);
-			}
-			case 1: {
-				Level<pointer> curr = this->left.getHeadLevel();
-				auto newLeft = this->left.setHeadLevel(2, curr.slop, elem);
-				return new FingerTree(newLeft, &right);
-			}
-			case 2: {
-				Level<pointer> curr = this->left.getHeadLevel();
-				const FingerNode *node = new FingerNode(curr.affix, curr.slop, elem);
-				auto newLeft = this->left.setHeadLevel(2, (pointer)node, nullptr);
-				return new FingerTree(newLeft, &right);
-			}
-			case 3: {
-				Level<pointer> curr = this->left.getHeadLevel();
-				auto newLeft = this->left.setHeadLevel(4, curr.affix, elem);
-				return new FingerTree(newLeft, &right);
-			}
-			case 4: {
-				assert(0 && "Handle the left push overflow case!");
-				return nullptr;
-			}
-			default:
-				assert(0 && "Should not be reached");
+		SuccinctArray<Bitmask, pointer> *newNear;
+		if(near_state == 4) {
+				newFar = near.setHeadLevel(near_state + 1, next);
+		} else {
+				const Level<pointer> curr = near.getHeadLevel();
+				const Level<pointer> next = curr.add(left, near_state, elem);
+				newFar = near.setHeadLevel(near_state + 1, next);
+		}
+		if(left) {
+			return new FingerTree(far, newNear);
+		} else {
+			return new FingerTree(newNear, far);
 		}
 	}
 }

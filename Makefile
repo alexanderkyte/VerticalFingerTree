@@ -8,3 +8,7 @@ test: test.cpp Makefile finger_tree.hpp
 
 test_array: test_array.cpp Makefile succ_array.hpp
 	clang++ -std=c++11 -ggdb test_array.cpp -o test_array
+
+clean:
+	- rm -rf *.gch *.dSYM *.o test test_array
+

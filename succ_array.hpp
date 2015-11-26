@@ -206,28 +206,125 @@ constexpr int footprint(const int state) {
 	return (state ? ((state % 2 == 0) ? 2 : 1) : 0);
 }
 
+
+template <typename Bitmask, typename pointer>
+const inline SuccinctArray<Bitmask, pointer> *
+SuccinctArray<Bitmask, pointer>::parallelUnderflow
+(const pointer elem, const bool left) const {
+	// Mask to check for overflow
+	const Bitmask underflowMask = stateRepeat<Bitmask>(4);
+	const numUnderflowLevels = __builtin_clz(underflowMask ^ this->schema) / 3;
+
+	// Note zero indexing
+	const Level nonUnderflowState = this->getState(numUnderflowLevels);
+	const Level nonUnderflow = this->getLevel(numUnderflowLevels, nonUnderflowState);
+	const Level futureNonUnderflow = nonUnderflow.remove(left, nonUnderflowState);
+
+	// All levels that previously had state 1 will now have 3
+	const Bitmask afterUnderflowMask =
+		stateRepeatFor<Bitmask>(bitmaskFor<Bitmask>(3), numUnderflowLevels);
+	const Bitmask futureNonUnderflowMask = futureNonUnderflow->mask() << numUnderflowLevels;
+	const Bitmask unaffected = this->schema & (~0x0 << numUnderflowLevels);
+	const Bitmask futureMask = afterUnderflowMask | futureNonUnderflowMask | unaffected;
+
+	// Note: We pop one element from the front of the data
+	// For underflows:
+	// level N+1 slop becomes level N 3-affix
+	// level N affix becomes level N+1 slop.
+	// We aren't actually moving any bits, just reinterpreting them
+	//
+	// This means that we can memcpy:
+	//   the underflowing levels, skipping first slop
+	//   the first non-underflowing level, with one element removed
+	//   the elements after the first non-underflowing level
+	const int numBefore = __builtin_popcount(this->schema & (~0x0 >> numUnderflowLevels)) - 1;
+	const int numAfter = __builtin_popcount(unaffected);
+	const int slopFootprint = (futureNonOverflow->slop != nullptr) ? 1 : 0;
+	const int affixFootprint = (futureNonOverflow->affix != nullptr) ? 1 : 0;
+	const int unaffectedCount = __builtin_popcount(unaffected);
+	const int totalCount = numBefore + numAfter + slopFootprint + affixFootprint + unaffectedCount;
+
+	pointer *newData = new pointer[totalSize];
+
+	// The underflowing levels
+	memcpy(newData, &this->data[1], numBefore * sizeof(pointer));
+
+	// The first non-underflowing level, with one element removed
+	if(slopFootprint != 0) {
+		newData[numBefore] = futureNonOverflow->slop;
+	}
+	if(futureNonOverflow->affix) {
+		newData[numBefore + slopFootprint] = futureNonOverflow->affix;
+	}
+
+	// The elements after the first non-overflowing level
+	const int copied = numBefore + slopFootprint + affixFootprint;
+	memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(pointer));
+
+	return new SuccinctArray<Bitmask, pointer>(futureMask, newData);
+}
+
+
+
 template <typename Bitmask, typename pointer>
 const inline SuccinctArray<Bitmask, pointer> *
 SuccinctArray<Bitmask, pointer>::parallelOverflow
 (const pointer elem, const bool left) const {
+	// Mask to check for overflow
 	const Bitmask overflowMask = stateRepeat<Bitmask>(4);
-	const numOverflowLevels = __builtin_clz(overflow_mask ^ this->schema) / 3;
-	const Bitmask afterOverflowMask =
-		stateRepeatFor<Bitmask>(bitmaskFor<Bitmask>(state), numOverflowLevels);
-	
+	const numOverflowLevels = __builtin_clz(overflowMask ^ this->schema) / 3;
+
 	// Note zero indexing
 	const Level nonOverflowState = this->getState(numOverflowLevels);
-	const Level nonOverflow = this->getLevel(nonOverflowState numOverflowLevels);
-	const Level nonFuture = nonOverflow.add(left, nonOverflowState, elem);
+	const Level nonOverflow = this->getLevel(numOverflowLevels, nonOverflowState);
+	const Level futureNonOverflow = nonOverflow.add(left, nonOverflowState, elem);
+
+	// All levels that previously had state 4 will now have 2
+	const Bitmask afterOverflowMask =
+		stateRepeatFor<Bitmask>(bitmaskFor<Bitmask>(2), numOverflowLevels);
+	const Bitmask futureNonOverflowMask = futureNonOverflow->mask() << numOverflowLevels;
+	const Bitmask unaffected = this->schema & (~0x0 << numOverflowLevels);
+	const Bitmask futureMask = afterOverflowMask | futureNonOverflowMask | unaffected;
 
 	// Note: the new element becomes the level 0 slop,
+	// For overflows:
 	// level N slop becomes level N 1-affix
-	// level N affix becomes level N+1 slop
+	// level N affix becomes level N+1 slop.
+	// We aren't actually moving any bits, just reinterpreting them
 	//
-	// This means that we can memcpy the data segment
-	// of overflowing levels after the element, and then
-	// handle the one level after that which doesn't overflow
-	// and then memcpy the rest
+	// This means that we can memcpy:
+	//   the new element
+	//   the overflowing levels
+	//   the first non-overflowing level, with one element added
+	//   the elements after the first non-overflowing level
+	const int numBefore = __builtin_popcount(this->schema & (~0x0 >> numOverflowLevels));
+	const int numAfter = __builtin_popcount(unaffected);
+	const int slopFootprint = (futureNonOverflow->slop != nullptr) ? 1 : 0;
+	const int affixFootprint = (futureNonOverflow->affix != nullptr) ? 1 : 0;
+	const int unaffectedCount = __builtin_popcount(unaffected);
+	const int totalCount = numBefore + numAfter + slopFootprint + affixFootprint + unaffectedCount + 1;
+
+	pointer *newData = new pointer[totalSize];
+
+	// The new element
+	newData[0] = elem;
+
+	// The overflowing levels
+	memcpy(&newData[1], this->data, numBefore * sizeof(pointer));
+
+	// The first non-overflowing level, with one element added
+	if(slopFootprint != 0) {
+		newData[1 + numBefore] = futureNonOverflow->slop;
+	}
+	if(futureNonOverflow->affix) {
+		newData[1 + numBefore + slopFootprint] = futureNonOverflow->affix;
+	}
+
+	// The elements after the first non-overflowing level
+	const int copied = 1 + numBefore + slopFootprint + affixFootprint;
+	memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(pointer));
+
+	return new SuccinctArray<Bitmask, pointer>(futureMask, newData);
 }
 
 // Observation: we only modify head except for
