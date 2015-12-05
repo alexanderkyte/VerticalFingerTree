@@ -5,24 +5,69 @@
 #include <cstring>
 #include "level.hpp"
 
-template <typename Bitmask, typename pointer>
+template <typename Left, typename Right, bool which>
+union Either {
+  Left left;
+  Right right;
+
+  const void
+  get(std::function left(
+}
+
+template <typename Value>
+struct HeteroArrayRest {
+  const FingerNode<Value> *rest[];
+
+  HeteroArrayTwo(FingerNode<Value> **rest):
+    rest(rest); 
+}
+
+template <typename Value>
+struct HeteroArrayOne: HeteroArrayRest {
+  const HeteroArrayRest prefix;
+  const Value one;
+
+  HeteroArrayOneFour(const Value one, FingerNode<Value> **rest):
+    one(one), rest(rest); 
+}
+
+template <typename Value>
+struct HeteroArrayTwo: HeteroArrayOne {
+  const HeteroArrayOne prefix;
+  const Value two;
+
+  HeteroArrayTwo(const Value one, const Value two, FingerNode<Value> **rest):
+    one(one), two(two), rest(rest); 
+}
+
+template <typename Bitmask, typename Value, typename ArrayType>
 class SuccinctArray {
-	typedef Level<Bitmask, pointer> LevelType;
+  typedef Level<Bitmask, Value> LevelType;
 
   private:
-    const pointer *data;
+    // This contains an array prefix
+    // that has unboxed references to values
+    const ArrayType contents;
     const Bitmask schema;
 
-    SuccinctArray(Bitmask mask, pointer *payload): data(payload), schema(mask) {}
+    SuccinctArray(Bitmask mask, ArrayType *contents): contents(contents), schema(mask) {}
 
   public:
-    SuccinctArray(void): data(nullptr), schema() {}
+    SuccinctArray(void): contents({0}), schema() {}
 
-    const inline SuccinctArray<Bitmask, pointer> *
+    ~SuccinctArray(void) {
+      for(int i=0; i < __builtin_popcount(schema); i++) {
+        delete contents.rest[i];
+      }
+      delete contents.rest;
+      contents.~ArrayType();
+    }
+
+    const inline SuccinctArray<Bitmask, Value> *
     append(const SuccinctArray *other) const;
 
-    const inline SuccinctArray<Bitmask, pointer> *
-    setHeadLevel(const int, const pointer affix, const pointer slop) const;
+    const inline SuccinctArray<Bitmask, Value> *
+    setHeadLevel(const int, const Value affix, const Value slop) const;
 
     const inline LevelType
     getLevel(int level, int state) const;
@@ -30,35 +75,79 @@ class SuccinctArray {
     const inline int
     getState(int level) const;
 
-    const inline SuccinctArray<Bitmask, pointer> *
+    const inline SuccinctArray<Bitmask, Value> *
     offset(int level) const;
 
     static
-    const inline SuccinctArray<Bitmask, pointer>
-    fromArray(const pointer *unpacked, const int size);
+    const inline SuccinctArray<Bitmask, Value>
+    fromArray(const Value *unpacked, const int size);
 
-    const inline SuccinctArray<Bitmask, pointer> *
+    const inline SuccinctArray<Bitmask, Value> *
     parallelUnderflow
     (const bool left) const;
 
-    const inline SuccinctArray<Bitmask, pointer> *
+    const inline SuccinctArray<Bitmask, Value> *
     parallelOverflow
-    (const bool left, const pointer elem) const;
+    (const bool left, const Value elem) const;
 
-    //const std::vector<pointer>
-    //unpack(void) const;
+    const std::pair<bool, Value>
+    find(const Measurer measurere, const std::function<bool(Measure)> predicate) const;
 };
 
-template <typename Bitmask, typename pointer>
-const inline SuccinctArray<Bitmask, pointer>
-SuccinctArray<Bitmask, pointer>::fromArray(const pointer *unpacked, const int size) {
+// Find
+template <typename Bitmask>
+const std::pair<Measure, Value>
+FingerTree<Bitmask>::find(const std::function<Measure(Measure, Measure)> combine,
+const std::function<bool(Measure)> predicate) const {
+  Measure accum = this->measurer->identity;
+  if(this->schema & 0x1) {
+    accum = combine(this->array->one);
+  }
+  if(predicate(accum)) {
+    // done
+  }
+  if(this->schema & 0x2) {
+    accum = this->combine(this->array->two);
+  }
+  if(predicate(accum)) {
+    // done
+  }
+  const int limit = __builtin_popcount(this->schema >> 2);
+
+  // We memoize the accumulation
+  if(!this->measureAccum) {
+    for(int i=0; i < limit; i++) {
+      if(predicate(this->measureAccum[i])) {
+        return this->data[i]->find(combine, predicate, this->measurer->accum);
+      }
+    }
+  } else {
+    // TODO: use binary search
+    std::pair<Measure, Value> result;
+    bool set;
+    for(int i=0; i < limit; i++) {
+      accum = this->combine(this->data[i]->measure, accum);
+      this->measureAccum[i] = accum;
+      if(predicate(this->measureAccum[i] && !set)) {
+        set = true;
+        result = this->data[i]->find(combine, predicate, this->measurer->accum);
+      }
+    }
+    return result;
+  }
+}
+
+template <typename Bitmask, typename Value>
+const inline SuccinctArray<Bitmask, Value>
+SuccinctArray<Bitmask, Value>::fromArray(const Value *unpacked, const int size) {
 #ifdef DEBUG
   assert(sizeof(Bitmask) >= size);
 #endif
 
   if(size == 0) {
-    return SuccinctArray<Bitmask, pointer>(NULL, 0);
+    return SuccinctArray<Bitmask, Value, void *>(NULL, 0);
   }
+
   Bitmask mask = {0};
   const int single_bit = 0x1;
 
@@ -69,18 +158,26 @@ SuccinctArray<Bitmask, pointer>::fromArray(const pointer *unpacked, const int si
   }
   // Schema is fixed after this point
 
-  pointer *data = new pointer[__builtin_popcount(mask)];
+  Value *rest = new Value[__builtin_popcount(mask >> 2)];
 
   int lower = 0;
-  for(int i=0; i < size; i++) {
+  for(int i=2; i < size; i++) {
     if(unpacked[i] != nullptr) {
-      data[lower] = unpacked[i];
+      rest[lower] = unpacked[i];
       lower++;
     }
   }
 
-  // Data is fixed after this point
-  return SuccinctArray<Bitmask, pointer>(mask, data);
+  if(mask & 0x2) {
+    const HeteroArrayTwo data = new HeteroArrayTwo(unpacked[0], unpacked[1], rest);
+    return SuccinctArray<Bitmask, Value>(mask, data);
+  } else if(mask & 0x1) {
+    const HeteroArrayOne data = new HeteroArrayOne(unpacked[0], rest);
+    return SuccinctArray<Bitmask, Value, HeteroArrayOne>(mask, data);
+  } else {
+    const HeteroArrayNone data = new HeteroArrayZone(rest);
+    return SuccinctArray<Bitmask, Value>(mask, data);
+  }
 }
 
 //
@@ -129,18 +226,10 @@ state(const Bitmask bitmask) {
 //
 // End compile-time bitmask helpers
 //
-template <typename Bitmask, typename pointer>
-const SuccinctArray<Bitmask, pointer> *
-SuccinctArray<Bitmask, pointer>::offset(int level) const {
-  const Bitmask suffixMask = this->schema >> (level * 3);
-  const pointer *suffixData = &this->data[level * 3];
 
-  return new SuccinctArray(suffixMask, suffixData);
-}
-
-template <typename Bitmask, typename pointer>
-const SuccinctArray<Bitmask, pointer> *
-SuccinctArray<Bitmask, pointer>::append(const SuccinctArray *other) const {
+template <typename Bitmask, typename Value>
+const SuccinctArray<Bitmask, Value> *
+SuccinctArray<Bitmask, Value>::append(const SuccinctArray *other) const {
   // shift bitmask by size of schema
   const int thisSize = __builtin_popcount(this->schema);
   // round up the number of levels
@@ -151,11 +240,11 @@ SuccinctArray<Bitmask, pointer>::append(const SuccinctArray *other) const {
 
   const int thatSize = __builtin_popcount(other->schema);
 
-  pointer newData[] = new pointer[thisSize + thatSize];
+  Value newData[] = new Value[thisSize + thatSize];
   // memcpy prefix
-  memcpy(newData, this->data, thisSize * sizeof(pointer));
+  memcpy(newData, this->data, thisSize * sizeof(Value));
   // memcpy suffix
-  memcpy(&newData[thisSize], other->data, thatSize * sizeof(pointer));
+  memcpy(&newData[thisSize], other->data, thatSize * sizeof(Value));
 }
 
 // The number of references the level
@@ -168,9 +257,9 @@ constexpr int footprint(const int state) {
 }
 
 
-template <typename Bitmask, typename pointer>
-const inline SuccinctArray<Bitmask, pointer> *
-SuccinctArray<Bitmask, pointer>::parallelUnderflow
+template <typename Bitmask, typename Value>
+const inline SuccinctArray<Bitmask, Value> *
+SuccinctArray<Bitmask, Value>::parallelUnderflow
 (const bool left) const {
   // Mask to check for overflow
   const Bitmask underflowMask = stateRepeat<Bitmask>(4);
@@ -205,10 +294,10 @@ SuccinctArray<Bitmask, pointer>::parallelUnderflow
   const int unaffectedCount = __builtin_popcount(unaffected);
   const int totalCount = numBefore + numAfter + slopFootprint + affixFootprint + unaffectedCount;
 
-  pointer *newData = new pointer[totalCount];
+  Value *newData = new Value[totalCount];
 
   // The underflowing levels
-  memcpy(newData, &this->data[1], numBefore * sizeof(pointer));
+  memcpy(newData, &this->data[1], numBefore * sizeof(Value));
 
   // The first non-underflowing level, with one element removed
   if(slopFootprint != 0) {
@@ -220,17 +309,19 @@ SuccinctArray<Bitmask, pointer>::parallelUnderflow
 
   // The elements after the first non-underflowing level
   const int copied = numBefore + slopFootprint + affixFootprint;
-  memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(pointer));
+  memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(Value));
 
-  return new SuccinctArray<Bitmask, pointer>(futureMask, newData);
+  const HeteroArrayThree<Value> hetero = new HeteroArrayThree(newData);
+
+  return new SuccinctArray<Bitmask, Value, HeteroArrayThree<Value>>(futureMask, hetero);
 }
 
 
 
-template <typename Bitmask, typename pointer>
-const inline SuccinctArray<Bitmask, pointer> *
-SuccinctArray<Bitmask, pointer>::parallelOverflow
-(const bool left, const pointer elem) const {
+template <typename Bitmask, typename Value>
+const inline SuccinctArray<Bitmask, Value> *
+SuccinctArray<Bitmask, Value>::parallelOverflow
+(const bool left, const Value elem) const {
   // Mask to check for overflow
   const Bitmask overflowMask = stateRepeat<Bitmask>(4);
   const int numOverflowLevels = __builtin_clz(overflowMask ^ this->schema) / 3;
@@ -258,71 +349,105 @@ SuccinctArray<Bitmask, pointer>::parallelOverflow
   //   the overflowing levels
   //   the first non-overflowing level, with one element added
   //   the elements after the first non-overflowing level
-  const int numBefore = __builtin_popcount(this->schema & (~0x0 >> numOverflowLevels));
+  const int withoutSpecial = this->schema & ~0x2;
+  const int numBefore = __builtin_popcount(withoutSpecial & (~0x0 >> numOverflowLevels));
   const int numAfter = __builtin_popcount(unaffected);
   const int slopFootprint = (futureNonOverflow.slop != nullptr) ? 1 : 0;
   const int affixFootprint = (futureNonOverflow.affix != nullptr) ? 1 : 0;
   const int unaffectedCount = __builtin_popcount(unaffected);
   const int totalCount = numBefore + numAfter + slopFootprint + affixFootprint + unaffectedCount + 1;
 
-  pointer *newData = new pointer[totalCount];
-
-  // The new element
-  newData[0] = elem;
+  Value *newData = new Value[totalCount];
 
   // The overflowing levels
-  memcpy(&newData[1], this->data, numBefore * sizeof(pointer));
+  memcpy(newData, this->data, numBefore * sizeof(Value));
 
   // The first non-overflowing level, with one element added
   if(slopFootprint != 0) {
-    newData[1 + numBefore] = futureNonOverflow.slop;
+    newData[numBefore] = futureNonOverflow.slop;
   }
   if(futureNonOverflow.affix) {
-    newData[1 + numBefore + slopFootprint] = futureNonOverflow.affix;
+    newData[numBefore + slopFootprint] = futureNonOverflow.affix;
   }
 
   // The elements after the first non-overflowing level
   const int copied = 1 + numBefore + slopFootprint + affixFootprint;
-  memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(pointer));
+  memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(Value));
 
-  return new SuccinctArray<Bitmask, pointer>(futureMask, newData);
+  HeteroArrayTwo<Value> newHeteroData = new HeteroArrayTwo<Value>(elem, this->one, newData);
+
+  return new SuccinctArray<Bitmask, Value, HeteroArrayTwo<Value>>(futureMask, newHeteroData);
 }
 
 // Observation: we only modify head except for
 // in overflow, and in that case we can append
 // the non-overflowing case onwards, with a simple
 // memcpy and bitshift
-template <typename Bitmask, typename pointer>
-const inline SuccinctArray<Bitmask, pointer> *
-SuccinctArray<Bitmask, pointer>::setHeadLevel
-(const int state, const pointer affix, const pointer slop) const {
+template <typename Bitmask, typename Value>
+const inline SuccinctArray<Bitmask, Value> *
+SuccinctArray<Bitmask, Value>::setHeadLevel
+(const int state, const Value affix, const Value slop) const {
   const int total_size = __builtin_popcount(this->schema);
   const int upper_start = __builtin_popcount(this->schema << 3);
   const int upper_size = total_size - upper_start;
   const Bitmask levelMask = bitmaskFor<Bitmask>(state);
 
-  const char toSkip = __builtin_popcount(this->schema & 0x7);
-  const int toCopy = footprint(state);
+  const int skipOne == this->schema & 0x4 != 0 ? 1 : 0;
+  const int copyOne = affix >= 3 ? 1 : 0;
+  const int toCopy = total_size - skipOne + copyOne;
 
-  pointer *newVersion = new pointer[total_size - toSkip + toCopy];
+  Value *newVersion = new Value[toCopy];
+
+  if(copyOne != 0) {
+  	newVersion[0] = affix;
+  } else {
+  	head->two = affix;
+  }
+
+  for(int i=copyOne; i < toCopy; i++) {
+  	newVersion[i] = this->contents->rest[i];
+		newVersion[i]->inc_ref();
+  }
+
   if(slop){
     newVersion[0] = slop;
   }
   if(affix){
     newVersion[slop != NULL ? 1 : 0] = affix;
   }
-  memcpy(&newVersion[toCopy], &this->data[toSkip], upper_size * sizeof(pointer));
+  memcpy(&newVersion[toCopy], &this->data[toSkip], upper_size * sizeof(Value));
 
   // Mask out lower bits
   const Bitmask withoutLower = (schema & ~0x7);
   const Bitmask newMask = withoutLower | levelMask;
 
-  return new SuccinctArray<Bitmask, pointer>(newMask, newVersion);
+  switch(state) {
+    case 0: {
+      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
+        newMask, new HeteroArray<Value>);
+    }
+    case 1: {
+      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
+        newMask, new HeteroArray<Value>);
+    }
+    case 2: {
+      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
+        newMask, new HeteroArray<Value>);
+    }
+    case 3: {
+      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
+        newMask, new HeteroArray<Value>);
+    }
+    case 4: {
+      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
+        newMask, new HeteroArray<Value>);
+    }
+  }
 }
 
-template <typename Bitmask, typename pointer>
+template <typename Bitmask, typename Value>
 const int
-SuccinctArray<Bitmask, pointer>::getState(int level) const {
+SuccinctArray<Bitmask, Value>::getState(int level) const {
   // Shift out lower levels, mask to move current level to head
   const Bitmask base = (schema >> (level * 3)) & 0x7;
   const int three_affix = (base & (0x1 << 2)) ? 3 : 0;
@@ -331,9 +456,9 @@ SuccinctArray<Bitmask, pointer>::getState(int level) const {
   return slop + one_affix + three_affix;
 }
 
-template <typename Bitmask, typename pointer>
-inline const Level<Bitmask, pointer>
-SuccinctArray<Bitmask, pointer>::getLevel(int level, int state) const {
+template <typename Bitmask, typename Value>
+inline const Level<Bitmask, Value>
+SuccinctArray<Bitmask, Value>::getLevel(int level, int state) const {
   int tmp_off;
   if(level != 0) {
     tmp_off = __builtin_popcount(this->schema & (~0x1 << level * 3));
