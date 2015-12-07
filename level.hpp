@@ -2,6 +2,7 @@
 #define __FINGER_TREE_LEVEL
 
 #include <functional>
+#include <vector>
 
 template <typename Type, typename Measure>
 class Measurer {
@@ -18,156 +19,95 @@ class Measurer {
       assert(tmp == combine(tmp, tmp);
 #endif
     }
-}
+};
 
 template <typename Type, typename Measure>
-class MeasuredBox { 
+class MeasuredPtr { 
   public:
     const Measure measure;
     const Type value;
-}
+};
 
 
-template <typename Value, typename Measure, typename Bitmask>
+template <typename Value, typename Measure>
 class FingerNode {
-  std::array<Measure, 3> values;
 
-  typedef 
-  std::tuple<Measure accum, FingerTree<Bitmask> before, FingerTree<Bitmask> after>>
-  Accumulator;
-
-private:
-		// Will work on find first
-
-   //const inline
-   //Accumulator
-   //splitInner(const std::function<bool(Measure)> predicate, const Accumulator accum) {
-     //int index = 0;
-     //if(this.level == 0) {
-       //Measure measureAccum = std::copy(accum->accum);
-       //while(index < 3 && !predicate(measureAccum)) {
-         //const Measure thisOne = measure(this->items[index]);
-         //measureAccum = this->measurer->combine(measureAccum, thisOne);
-         //before = before.pushRight(this->items[index]);
-         //index++;
-       //}
-       //if(index < 3) {
-         //FingerTree<Bitmask> after = FingerTree<Bitmask>.Empty();
-         //while(index < 3) {
-           //after = after.pushRight(this->items[index]);
-         //}
-         //return Accumulator(measureAccum, before, after)
-       //} else {
-         //return Accumulator(measureAccum, before, nullptr)
-       //}
-     //} else {
-       //Accumulator thisCursor
-
-       //while(index < 3 && !thisCursor->after && !predicate(measureAccum)) {
-         //const Accumulator thisAccum = Accumulator(measureAccum, before, nullptr);
-         //thisCursor = this->contents[index]->splitInner(predicate, accum);
-         //index++;
-       //}
-       //if(index < 3) {
-         //FingerTree<Bitmask> after
-         //if(thisCursor.after) {
-           //after = thisCursor.after
-         //} else {
-           //after = FingerTree<Bitmask>.Empty();
-         //}
-         //while(index < 3) {
-           //after = after.pushRight(this->items[index]);
-         //}
-         //Accumulator nextAccum = Accumulator(measureAccum, before, after);
-         //return Accumulator(measureAccum, before, after)
-       //} else {
-         //return Accumulator(measureAccum, before, nullptr)
-       //}
-     //}
-   //}
+  private:
+      // Will work on find first
+      // Implement split
+      // implement combine logic
 
   public:
    const int level;
 
-    ~FingerNode(void) {
-      if(level > 0) {
-        FingerNodeInner self = (FingerNodeInner)&this;
-        self.left.internal.dec_Value();
-        self.right.internal.dec_Value();
-        self.middle.internal.dec_Value();
-      }
-    }
+   const Measure measure;
 
+   virtual ~FingerNode(void)  = 0;
 
    const inline
    std::pair<Measure, Value>
    find(const std::function<Measure(Measure, Measure)> combine,
         const std::function<bool(Measure)> predicate,
-        const Measure Accum) = {0};
+        const Measure Accum) = 0;
+};
 
-    FingerNode(const Value left, const Value middle, const Value right):
-      left(left), middle(middle), right(right) {}
-
-    const inline void
-    dec_ref() {
-      ref_count--;
-      if(ref_count == 0) {
-        this->~FingerNode();
-      }
-    }
-
-    const inline void
-    inc_ref() {
-      ref_count++;
-    }
-}
-
-template <typename Value>
-class FingerNodeLeaf: FingerNode {
-  typedef FingerNodeValue<Value> Value;
+template <typename Value, typename Measure>
+class FingerNodeLeaf: public FingerNode<Value, Measure> {
   public:
-    const Value left;
-    const Value middle;
-    const Value right;
+    const MeasuredPtr<Measure, Value> left;
+    const MeasuredPtr<Measure, Value> middle;
+    const MeasuredPtr<Measure, Value> right;
 
     const inline
     std::pair<Measure, Value>
-    find(const std::function<Measure(Measure, Measure)>,  combine, const std::function<bool(Measure)> predicate, const Measure Accum) {
-      Measure measureAccum = std::copy(accum->accum);
-      while(index < 3 && !predicate(measureAccum)) {
-        Measure thisOne = this->measures([index]);
-        measureAccum = this->measurer->combine(measureAccum, thisOne);
-        index++;
+    find(const std::function<Measure(Measure, Measure)> combine,
+      const std::function<bool(Measure)> predicate, const Measure accum) const {
+
+      Measure withLeft = accum.combine(left->measure);
+      if(predicate(withLeft)) {
+        return left;
       }
-      if(predicate(measureAccum)) {
-        return std::pair<Measure, Value>(measureAccum, this->contents[i]);
-      } else {
-        return std::pair<Measure, Value>(measureAccum, {0});
+      Measure withMiddle = withLeft.combine(middle->measure);
+      if(predicate(withMiddle)) {
+        return middle;
+      }
+      Measure withRight = withMiddle.combine(right->measure);
+      if(predicate(withRight)) {
+        return right;
       }
     }
 };
 
-template <typename Value>
-class FingerNodeInner: FingerNode {
-  typedef FingerNodeValue<Value> Value;
+template <typename Value, typename Measure>
+class FingerNodeInner: public FingerNode<Value, Measure> {
+	typedef MeasuredPtr<Measure, std::shared_ptr<FingerNode<Value, Measure>>> Element;
+
   public:
-    const FingerNode<Value> left;
-    const FingerNode<Value> middle;
-    const FingerNode<Value> right;
+    const Element left;
+    const Element middle;
+    const Element right;
 
     const inline
     std::pair<Measure, Value>
-    find(const std::function<Measure(Measure, Measure)> combine, const std::function<bool(Measure)> predicate, const Measure Accum) {
-      Accum localAccum = std::copy(accum);
-      while(index < 3 && !predicate(localAccum::get<0>();)) {
-        localAccum = findInner(combine, predicate, measureAccum);
-        index++;
+    find(const std::function<Measure(Measure, Measure)> combine,
+      const std::function<bool(Measure)> predicate, const Measure accum) const {
+
+      Measure withLeft = accum.combine(left);
+      if(predicate(withLeft)) {
+        return find(left);
       }
-      return localAccum;
+      Measure withMiddle = withLeft.combine(middle);
+      if(predicate(withMiddle)) {
+        return find(middle);
+      }
+      Measure withRight = withMiddle.combine(right);
+      if(predicate(withRight)) {
+        return find(right);
+      }
     }
 };
 
-template <typename Bitmask, typename Value>
+template <typename Bitmask, typename Value, typename Measure>
 class Level {
   public:
     const Value affix;
@@ -185,7 +125,7 @@ class Level {
     Level(const int state, const Value affix, const Value slop): 
     affix(affix), slop(slop), state(state) {}
 
-    const inline Level<Bitmask, Value>
+    const inline Level
     add(bool left, Value elem) const {
       switch(state) {
         case 0:
@@ -198,10 +138,10 @@ class Level {
           }
         case 2: {
           if(left) {
-            const auto node = new FingerNode<Value>(elem, this->affix, this->slop);
+            const auto node = new FingerNode<Value, Measure>(elem, this->affix, this->slop);
             return Level(3, (Value)node, nullptr);
           } else {
-            const auto node = new FingerNode<Value>(this->affix, this->slop, elem);
+            const auto node = new FingerNode<Value, Measure>(this->affix, this->slop, elem);
             return Level(3, (Value)node, nullptr);
           }
         }
@@ -216,7 +156,7 @@ class Level {
       }
     }
 
-    const inline Level<Bitmask, Value>
+    const inline Level
     remove(bool left) const {
       switch(state) {
         case 2:

@@ -156,9 +156,9 @@ FingerTree<Bitmask>::peekLeft(void) const
       case 0:
         return {0};
       case 1:
-        return curr.slop;
+        return this->right.contents->slop.value;
       case 2:
-        return curr.slop;
+        return this->right.contents->affix.value;
       default:
         assert(0 && "Should not be reached");
         return {0};
@@ -171,9 +171,9 @@ FingerTree<Bitmask>::peekLeft(void) const
       case 4: 
       case 1:
       case 2:
-        return curr.slop;
+        return this->left.contents->slop.value;
       case 3:
-        return ((FingerNode<Value> *)curr.affix)->left;
+        return ((FingerNode<Value> *)this->left.contents->rest[0]).value;
       default:
         assert(0 && "Should not be reached");
         return {0};
@@ -189,14 +189,13 @@ FingerTree<Bitmask>::peekRight(void) const
   const int right_state = this->right.getState(0);
 
   if(right_state == 0) {
-    LevelType curr = left.getLevel(0, left_state);
     switch(left_state) {
       case 0:
         return {0};
       case 1:
-        return curr.slop;
+        return this->left.contents->slop.value;
       case 2:
-        return curr.affix;
+        return this->left.contents->affix.value;
       default:
         assert(0 && "Should not be reached");
         return {0};
@@ -209,9 +208,9 @@ FingerTree<Bitmask>::peekRight(void) const
       case 4: 
       case 1:
       case 2:
-        return curr.slop;
+        return this->right.contents->slop.value;
       case 3:
-        return ((FingerNode<Value> *)curr.affix)->right;
+        return ((FingerNode<Value> *)this->right.contents->rest[0]).value;
       default:
         assert(0 && "Should not be reached");
         return {0};

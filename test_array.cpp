@@ -12,7 +12,7 @@ pushInts(void)
 {
 	const int affix = 100;
 	const int slop = 30;
-	auto arry = SuccinctArray<bitmask, pointer>::fromArray(nullptr, 0);
+	auto arry = SuccinctArray<bitmask, pointer>(nullptr, 0);
 	const int head_level_state = 2;
 	auto next = arry.setHeadLevel(head_level_state, &affix, &slop);
 	const auto both = next->getLevel(0, head_level_state);

@@ -5,63 +5,65 @@
 #include <cstring>
 #include "level.hpp"
 
-template <typename Left, typename Right, bool which>
-union Either {
-  Left left;
-  Right right;
-
-  const void
-  get(std::function left(
-}
-
-template <typename Value>
+template <typename Value, typename Measure>
 struct HeteroArrayRest {
-  const FingerNode<Value> *rest[];
+  typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
+  const std::vector<DeeperNode> rest;
 
-  HeteroArrayTwo(FingerNode<Value> **rest):
-    rest(rest); 
-}
+  HeteroArrayRest(std::vector<DeeperNode> rest): rest(rest) {}
+};
 
-template <typename Value>
-struct HeteroArrayOne: HeteroArrayRest {
-  const HeteroArrayRest prefix;
-  const Value one;
+template <typename Value, typename Measure>
+struct HeteroArrayOne {
+  typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
+  const MeasuredPtr<Measure, Value> slop;
+  const std::vector<DeeperNode> rest;
 
-  HeteroArrayOneFour(const Value one, FingerNode<Value> **rest):
-    one(one), rest(rest); 
-}
+  HeteroArrayOne(const MeasuredPtr<Value, Measure> one, const std::vector<DeeperNode> rest):
+    slop(one), rest(new HeteroArrayRest<Value, Measure>(rest)) {}
+};
 
-template <typename Value>
-struct HeteroArrayTwo: HeteroArrayOne {
-  const HeteroArrayOne prefix;
-  const Value two;
+template <typename Value, typename Measure>
+struct HeteroArrayTwo {
+  typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
 
-  HeteroArrayTwo(const Value one, const Value two, FingerNode<Value> **rest):
-    one(one), two(two), rest(rest); 
-}
+  const MeasuredPtr<Measure, Value> slop;
+  const MeasuredPtr<Measure, Value> affix;
+  const std::vector<DeeperNode> rest;
 
-template <typename Bitmask, typename Value, typename ArrayType>
+  HeteroArrayTwo(const MeasuredPtr<Value, Measure> one, const MeasuredPtr<Value, Measure> two, const std::vector<DeeperNode> rest):
+    slop(one), affix(two), rest(rest) {}
+};
+
+template <typename Value, typename Measure>
+struct HeteroArrayThree: public HeteroArrayRest<Value, Measure> {
+  typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
+
+  HeteroArrayThree(std::vector<DeeperNode> rest): HeteroArrayRest<Value, Measure>(rest) {}
+};
+
+template <typename Value, typename Measure>
+struct HeteroArrayFour: public HeteroArrayOne<Value, Measure> {
+  typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
+
+  HeteroArrayFour(const MeasuredPtr<Value, Measure> slop, const std::vector<DeeperNode> rest):
+    HeteroArrayOne<Value, Measure>(slop, rest) {}
+};
+
+template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
 class SuccinctArray {
-  typedef Level<Bitmask, Value> LevelType;
+  typedef Level<Bitmask, Value, Measure> LevelType;
 
   private:
     // This contains an array prefix
     // that has unboxed references to values
-    const ArrayType contents;
+    const ArrayType<Value, Measure> contents;
     const Bitmask schema;
 
     SuccinctArray(Bitmask mask, ArrayType *contents): contents(contents), schema(mask) {}
 
   public:
     SuccinctArray(void): contents({0}), schema() {}
-
-    ~SuccinctArray(void) {
-      for(int i=0; i < __builtin_popcount(schema); i++) {
-        delete contents.rest[i];
-      }
-      delete contents.rest;
-      contents.~ArrayType();
-    }
 
     const inline SuccinctArray<Bitmask, Value> *
     append(const SuccinctArray *other) const;
@@ -78,9 +80,9 @@ class SuccinctArray {
     const inline SuccinctArray<Bitmask, Value> *
     offset(int level) const;
 
-    static
-    const inline SuccinctArray<Bitmask, Value>
-    fromArray(const Value *unpacked, const int size);
+    //static
+    //const inline SuccinctArray<Bitmask, Value>
+    //fromArray(const Value *unpacked, const int size);
 
     const inline SuccinctArray<Bitmask, Value> *
     parallelUnderflow
@@ -96,7 +98,7 @@ class SuccinctArray {
 
 // Find
 template <typename Bitmask>
-const std::pair<Measure, Value>
+const inline MeasuredPtr<Measure, Value>
 FingerTree<Bitmask>::find(const std::function<Measure(Measure, Measure)> combine,
 const std::function<bool(Measure)> predicate) const {
   Measure accum = this->measurer->identity;
@@ -114,71 +116,57 @@ const std::function<bool(Measure)> predicate) const {
   }
   const int limit = __builtin_popcount(this->schema >> 2);
 
-  // We memoize the accumulation
-  if(!this->measureAccum) {
-    for(int i=0; i < limit; i++) {
-      if(predicate(this->measureAccum[i])) {
-        return this->data[i]->find(combine, predicate, this->measurer->accum);
-      }
+  Measure accum = this->measurer.getIdentity();
+  for(int i=0; i < limit; i++) {
+    accum = accum.combine(this->data[i]);
+    if(predicate(accum)) {
+      return this->data[i]->find(combine, predicate, accum);
     }
-  } else {
-    // TODO: use binary search
-    std::pair<Measure, Value> result;
-    bool set;
-    for(int i=0; i < limit; i++) {
-      accum = this->combine(this->data[i]->measure, accum);
-      this->measureAccum[i] = accum;
-      if(predicate(this->measureAccum[i] && !set)) {
-        set = true;
-        result = this->data[i]->find(combine, predicate, this->measurer->accum);
-      }
-    }
-    return result;
   }
 }
 
-template <typename Bitmask, typename Value>
-const inline SuccinctArray<Bitmask, Value>
-SuccinctArray<Bitmask, Value>::fromArray(const Value *unpacked, const int size) {
-#ifdef DEBUG
-  assert(sizeof(Bitmask) >= size);
-#endif
+//template <typename Bitmask, typename Value>
+//const inline SuccinctArray<Bitmask, Value>
+//SuccinctArray<Bitmask, Value>::fromArray(const Value *unpacked, const int size) {
+//#ifdef DEBUG
+  //assert(sizeof(Bitmask) >= size);
+//#endif
 
-  if(size == 0) {
-    return SuccinctArray<Bitmask, Value, void *>(NULL, 0);
-  }
+  //if(size == 0) {
+    //return SuccinctArray<Bitmask, Value, void *>(NULL, 0);
+  //}
 
-  Bitmask mask = {0};
-  const int single_bit = 0x1;
+  //Bitmask mask = {0};
+  //const int single_bit = 0x1;
 
-  for(int i=0; i < size; i++) {
-    if(unpacked[i] != nullptr) {
-      mask = mask | (single_bit << i);
-    }
-  }
-  // Schema is fixed after this point
+  //for(int i=0; i < size; i++) {
+    //if(unpacked[i] != nullptr) {
+      //mask = mask | (single_bit << i);
+    //}
+  //}
+  //// Schema is fixed after this point
 
-  Value *rest = new Value[__builtin_popcount(mask >> 2)];
+  //Value *rest = new Value[__builtin_popcount(mask) >> 2)];
 
-  int lower = 0;
-  for(int i=2; i < size; i++) {
-    if(unpacked[i] != nullptr) {
-      rest[lower] = unpacked[i];
-      lower++;
-    }
-  }
+  //int lower = 0;
+  //for(int i=2; i < size; i++) {
+    //if(unpacked[i] != nullptr) {
+      //rest[lower] = unpacked[i];
+      //lower++;
+    //}
+  //}
 
-  if(mask & 0x2) {
-    const HeteroArrayTwo data = new HeteroArrayTwo(unpacked[0], unpacked[1], rest);
-    return SuccinctArray<Bitmask, Value>(mask, data);
-  } else if(mask & 0x1) {
-    const HeteroArrayOne data = new HeteroArrayOne(unpacked[0], rest);
-    return SuccinctArray<Bitmask, Value, HeteroArrayOne>(mask, data);
-  } else {
-    const HeteroArrayNone data = new HeteroArrayZone(rest);
-    return SuccinctArray<Bitmask, Value>(mask, data);
-  }
-}
+  //if(mask & 0x2) {
+    //const HeteroArrayTwo data = new HeteroArrayTwo(unpacked[0], unpacked[1], rest);
+    //return SuccinctArray<Bitmask, Value>(mask, data);
+  //} else if(mask & 0x1) {
+    //const HeteroArrayOne data = new HeteroArrayOne(unpacked[0], rest);
+    //return SuccinctArray<Bitmask, Value, HeteroArrayOne>(mask, data);
+  //} else {
+    //const HeteroArrayNone data = new HeteroArrayZone(rest);
+    //return SuccinctArray<Bitmask, Value>(mask, data);
+  //}
+//}
 
 //
 // Start compile-time bitmask helpers
@@ -388,59 +376,52 @@ const inline SuccinctArray<Bitmask, Value> *
 SuccinctArray<Bitmask, Value>::setHeadLevel
 (const int state, const Value affix, const Value slop) const {
   const int total_size = __builtin_popcount(this->schema);
-  const int upper_start = __builtin_popcount(this->schema << 3);
-  const int upper_size = total_size - upper_start;
-  const Bitmask levelMask = bitmaskFor<Bitmask>(state);
+  const int upper_count = __builtin_popcount(this->schema >> 2);
 
   const int skipOne == this->schema & 0x4 != 0 ? 1 : 0;
-  const int copyOne = affix >= 3 ? 1 : 0;
-  const int toCopy = total_size - skipOne + copyOne;
+  const int copyOne = this->state >= 3 ? 1 : 0;
 
-  Value *newVersion = new Value[toCopy];
+  std::vector<shared_ptr<FingerNode<Value>>> = {0};
 
-  if(copyOne != 0) {
-  	newVersion[0] = affix;
+  if(copyOne + skipOne == 0) {
+    newVersion = this->contents.rest;
   } else {
-  	head->two = affix;
-  }
+    newVersion = new std::vector<shared_ptr<FingerNode<Value>>>(upper_count + copyOne);
 
-  for(int i=copyOne; i < toCopy; i++) {
-  	newVersion[i] = this->contents->rest[i];
-		newVersion[i]->inc_ref();
-  }
+    if(copyOne != 0) {
+      newVersion = affix;
+    }
 
-  if(slop){
-    newVersion[0] = slop;
+    for(int i=0; i < upper_count; i++) {
+      newVersion[copyOne + i] = this->contents->rest[toSkip + i]
+    }
   }
-  if(affix){
-    newVersion[slop != NULL ? 1 : 0] = affix;
-  }
-  memcpy(&newVersion[toCopy], &this->data[toSkip], upper_size * sizeof(Value));
 
   // Mask out lower bits
   const Bitmask withoutLower = (schema & ~0x7);
+  const Bitmask levelMask = bitmaskFor<Bitmask>(state);
   const Bitmask newMask = withoutLower | levelMask;
 
   switch(state) {
     case 0: {
-      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
-        newMask, new HeteroArray<Value>);
+      return new SuccinctArray<Bitmask, Value, HeteroArray>(
+        newMask, new HeteroArray<Value>());
     }
     case 1: {
-      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
-        newMask, new HeteroArray<Value>);
+      return new SuccinctArray<Bitmask, Value, HeteroArray>(
+        newMask, new HeteroArrayOne<Value>(slop, newVersion));
     }
     case 2: {
-      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
-        newMask, new HeteroArray<Value>);
+      return new SuccinctArray<Bitmask, Value, HeteroArrayTwo>(
+        newMask, new HeteroArrayTwo<Value>(slop, affix, newVersion));
     }
     case 3: {
-      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
-        newMask, new HeteroArray<Value>);
+      return new SuccinctArray<Bitmask, Value, HeteroArrayThree>(
+        newMask, new HeteroArrayThree<Value>(newVersion));
     }
     case 4: {
-      return new SuccinctArray<Bitmask, Value, HeteroArray<Value>>(
-        newMask, new HeteroArray<Value>);
+      return new SuccinctArray<Bitmask, Value, HeteroArrayFour>(
+        newMask, new HeteroArrayFour<Value>(slop, newVersion));
     }
   }
 }

@@ -1,11 +1,11 @@
-#ifndef __FINGER_TREE_SEQUENCE_H
-#define __FINGER_TREE_SEQUENCE_H
+#ifndef __FINGER_TREE_PRIORITY_H
+#define __FINGER_TREE_PRIORITY_H
 
 #include "finger_tree.hpp"
 #include "measure"
 
 template <typename Value, typename Internal>
-class SequenceLength: Measure<Value> {
+class MaxPriority: Measure<Value> {
 private:
   const int length;
 
@@ -20,7 +20,7 @@ public:
 
   const inline int 
   combine(Measure left, Measure right) const {
-    return new SequenceLength(left->length + right->length);
+    return new MaxPriority(max(left->length + right->length);
   };
 
   const inline int
@@ -34,6 +34,10 @@ public:
     return new SequenceLength(0);
   };
 }
+
+
+Measure tree to get max priority, then measure the tree to
+find equality for that priority. remove it.
 
 // This is a random access sequence that uses finger trees
 template <typename Value>

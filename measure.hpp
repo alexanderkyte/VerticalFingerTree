@@ -4,17 +4,17 @@
 template <typename Value>
 class Measure {
 public:
-  const inline bool
-  greaterThan(Measure<Value> other) = {0};
+  const virtual inline bool
+  predicate(const Measure<Value> other) const = 0;
 
-  const inline Measure
-  combine(Measure left, Measure right) = {0};
+  const virtual inline Measure
+  combine(Measure left, Measure right) const = 0;
 
-  const inline Measure
-  measure(Value item) = {0};
+  const virtual inline Measure
+  measure(Value item) const = 0;
 
-  const inline Measure 
-  getidentity(void) = {0};
+  const virtual inline Measure 
+  getidentity(void) const = 0;
 }
 
 #endif
