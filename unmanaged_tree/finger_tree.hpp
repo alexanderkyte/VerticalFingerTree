@@ -7,6 +7,7 @@
 
 template <typename Bitmask, typename Measure, typename Value>
 class FingerTree {
+  // TODO: specialize this, to get an inlined level setup
   typedef SuccinctArray<Bitmask, Value, HeteroArrayAny<Value, Measure>, Measure> Spine;
   typedef Level<Bitmask, Value, Measure> LevelType;
 
@@ -62,20 +63,20 @@ class FingerTree {
     peekLeft(void) const;
 
     const std::tuple<bool, Value>
-    find(const MeasuredPtr<Measure, Value> predicate) const {
-      auto leftRes = left.find(predicate);
+    find(const Measure *goal) const {
+      auto start = goal->getIdentity();
+      auto leftRes = left.find(goal, start);
 
-      if(leftRes.measure != (Value){0}) {
-        return std::tuple<bool, Value>(true, leftRes->value);
+      if(leftRes.value != (Value){0}) {
+        return std::tuple<bool, Value>(true, leftRes.value);
       }
 
-      std::pair<Measure, Value> rightRes =
-        left.find(predicate, std::get<1>(leftRes));
+      auto rightRes = right.find(&leftRes);
 
-      if(predicate(std::get<0>(rightRes)) != nullptr) {
-        return std::tuple<bool, Value>(true, std::get<1>(rightRes));
+      if(rightRes.predicate(goal)) {
+        return std::tuple<bool, Value>(true, rightRes.value);
       } else {
-        return std::tuple<bool, Value>(false, nullptr);
+        return std::tuple<bool, Value>(false, (Value){0});
       }
     }
 };

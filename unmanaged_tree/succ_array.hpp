@@ -52,6 +52,7 @@ struct HeteroArrayFour: public HeteroArrayOne<Value, Measure> {
     HeteroArrayOne<Value, Measure>(slop, rest) {}
 };
 
+
 template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
 class SuccinctArray {
   typedef Level<Bitmask, Value, Measure> LevelType;
@@ -94,34 +95,34 @@ class SuccinctArray {
     parallelOverflow
     (const bool left, const Value elem) const;
 
-    const inline MeasuredPtr<Measure, Value>
-    find(const MeasuredPtr<Measure, Value> accum) const;
+    const inline Measure 
+    find(const Measure *goal, const Measure *accum) const;
 };
 
 // Find
 template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
-const inline MeasuredPtr<Measure, Value>
-SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const MeasuredPtr<Measure, Value> accum) const {
+const inline Measure 
+SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure *goal, const Measure *accum) const {
   if(this->schema & 0x1) {
-    accum = accum.combine(this->array->one);
+    accum = accum->combine(this->array->one);
   }
-  if(accum->checkPredicate()) {
-  	return accum;
-    // done
+  if(accum->predicate()) {
+       return this->contents->one->find(goal);
   }
   if(this->schema & 0x2) {
-    accum = accum.combine(this->array->two);
+    accum = accum->combine(this->array->two);
   }
   if(accum->predicate(accum)) {
-    // done
+       return this->contents->two->find(goal);
   }
+
   const int limit = __builtin_popcount(this->schema >> 2);
 
   for(int i=0; i < limit; i++) {
-    accum = accum.combine(this->data[i]);
+    accum = accum->combine(this->contents[i]);
     if(predicate(accum)) {
-      return this->data[i]->find(accum);
-    }
+      return this->contents[i]->find(goal);
+    } 
   }
 }
 
@@ -157,14 +158,14 @@ SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const MeasuredPtr<Measur
   //}
 
   //if(mask & 0x2) {
-    //const HeteroArrayTwo data = new HeteroArrayTwo(unpacked[0], unpacked[1], rest);
-    //return SuccinctArray<Bitmask, Value>(mask, data);
+    //const HeteroArrayTwo contents = new HeteroArrayTwo(unpacked[0], unpacked[1], rest);
+    //return SuccinctArray<Bitmask, Value>(mask, contents);
   //} else if(mask & 0x1) {
-    //const HeteroArrayOne data = new HeteroArrayOne(unpacked[0], rest);
-    //return SuccinctArray<Bitmask, Value, HeteroArrayOne>(mask, data);
+    //const HeteroArrayOne contents = new HeteroArrayOne(unpacked[0], rest);
+    //return SuccinctArray<Bitmask, Value, HeteroArrayOne>(mask, contents);
   //} else {
-    //const HeteroArrayNone data = new HeteroArrayZone(rest);
-    //return SuccinctArray<Bitmask, Value>(mask, data);
+    //const HeteroArrayNone contents = new HeteroArrayZone(rest);
+    //return SuccinctArray<Bitmask, Value>(mask, contents);
   //}
 //}
 
@@ -228,11 +229,11 @@ SuccinctArray<Bitmask, Value, ArrayType, Measure>::append(const SuccinctArray *o
 
   const int thatSize = __builtin_popcount(other->schema);
 
-  Value newData[] = new Value[thisSize + thatSize];
+  Value newcontents[] = new Value[thisSize + thatSize];
   // memcpy prefix
-  memcpy(newData, this->data, thisSize * sizeof(Value));
+  memcpy(newcontents, this->contents, thisSize * sizeof(Value));
   // memcpy suffix
-  memcpy(&newData[thisSize], other->data, thatSize * sizeof(Value));
+  memcpy(&newcontents[thisSize], other->contents, thatSize * sizeof(Value));
 }
 
 // The number of references the level
@@ -265,7 +266,7 @@ SuccinctArray<Bitmask, Value, ArrayType, Measure>::parallelUnderflow
   const Bitmask unaffected = this->schema & (~0x0 << numUnderflowLevels);
   const Bitmask futureMask = afterUnderflowMask | futureNonUnderflowMask | unaffected;
 
-  // Note: We pop one element from the front of the data
+  // Note: We pop one element from the front of the contents
   // For underflows:
   // level N+1 slop becomes level N 3-affix
   // level N affix becomes level N+1 slop.
@@ -282,24 +283,24 @@ SuccinctArray<Bitmask, Value, ArrayType, Measure>::parallelUnderflow
   const int unaffectedCount = __builtin_popcount(unaffected);
   const int totalCount = numBefore + numAfter + slopFootprint + affixFootprint + unaffectedCount;
 
-  Value *newData = new Value[totalCount];
+  Value *newcontents = new Value[totalCount];
 
   // The underflowing levels
-  memcpy(newData, &this->data[1], numBefore * sizeof(Value));
+  memcpy(newcontents, &this->contents[1], numBefore * sizeof(Value));
 
   // The first non-underflowing level, with one element removed
   if(slopFootprint != 0) {
-    newData[numBefore] = futureNonUnderflow->slop;
+    newcontents[numBefore] = futureNonUnderflow->slop;
   }
   if(futureNonUnderflow->affix) {
-    newData[numBefore + slopFootprint] = futureNonUnderflow->affix;
+    newcontents[numBefore + slopFootprint] = futureNonUnderflow->affix;
   }
 
   // The elements after the first non-underflowing level
   const int copied = numBefore + slopFootprint + affixFootprint;
-  memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(Value));
+  memcpy(&newcontents[copied], this->contents[numBefore], unaffectedCount * sizeof(Value));
 
-  const auto hetero = new HeteroArrayThree<Value, Measure>(newData);
+  const auto hetero = new HeteroArrayThree<Value, Measure>(newcontents);
 
   return new SuccinctArray<Bitmask, Value, HeteroArrayThree<Value, Measure>, Measure>(futureMask, hetero);
 }
@@ -345,26 +346,26 @@ SuccinctArray<Bitmask, Value, ArrayType, Measure>::parallelOverflow
   const int unaffectedCount = __builtin_popcount(unaffected);
   const int totalCount = numBefore + numAfter + slopFootprint + affixFootprint + unaffectedCount + 1;
 
-  Value *newData = new Value[totalCount];
+  Value *newcontents = new Value[totalCount];
 
   // The overflowing levels
-  memcpy(newData, this->data, numBefore * sizeof(Value));
+  memcpy(newcontents, this->contents, numBefore * sizeof(Value));
 
   // The first non-overflowing level, with one element added
   if(slopFootprint != 0) {
-    newData[numBefore] = futureNonOverflow.slop;
+    newcontents[numBefore] = futureNonOverflow.slop;
   }
   if(futureNonOverflow.affix) {
-    newData[numBefore + slopFootprint] = futureNonOverflow.affix;
+    newcontents[numBefore + slopFootprint] = futureNonOverflow.affix;
   }
 
   // The elements after the first non-overflowing level
   const int copied = 1 + numBefore + slopFootprint + affixFootprint;
-  memcpy(&newData[copied], this->data[numBefore], unaffectedCount * sizeof(Value));
+  memcpy(&newcontents[copied], this->contents[numBefore], unaffectedCount * sizeof(Value));
 
-  const auto newHeteroData = new HeteroArrayTwo<Value, Measure>(elem, this->one, newData);
+  const auto newHeterocontents = new HeteroArrayTwo<Value, Measure>(elem, this->one, newcontents);
 
-  return new SuccinctArray<Bitmask, Value, HeteroArrayTwo<Value, Measure>, Measure>(futureMask, newHeteroData);
+  return new SuccinctArray<Bitmask, Value, HeteroArrayTwo<Value, Measure>, Measure>(futureMask, newHeterocontents);
 }
 
 // Observation: we only modify head except for
@@ -455,12 +456,12 @@ SuccinctArray<Bitmask, Value, ArrayType, Measure>::getLevel(int level, int state
       // Left is affix, right is slot
       // This follows bitmask ordering, not array
       // ordering
-      return LevelType(state, nullptr, this->data[0 + offset]);
+      return LevelType(state, nullptr, this->contents[0 + offset]);
     case 2:
     case 4:
-      return LevelType(state, this->data[1 + offset], this->data[0 + offset]);
+      return LevelType(state, this->contents[1 + offset], this->contents[0 + offset]);
     case 3:
-      return LevelType(state, this->data[0 + offset], nullptr);
+      return LevelType(state, this->contents[0 + offset], nullptr);
   }
 
   assert(0 && "Not reached");
