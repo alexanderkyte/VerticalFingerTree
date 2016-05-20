@@ -1,16 +1,19 @@
-#include <random_access.hpp>
+#include "random_access.hpp"
+#include "iostream"
 
 int main(void) {
-	PersistentSequence<int> fibs = new PersistentSequence<int>();
+	PersistentSequence<int> *fibs = new PersistentSequence<int>();
 
 	for(int i=0; i < 30; i++) {
-		int next = fibs[i-1] + fibs[i-2];
-		fibs.pushRight(next);
+		int first = fibs->get(i-1);
+		int second = fibs->get(i-2);
+		int next = first + second;
+		fibs->append(next);
 	}
 
-	cout << "Backwards fibs";
+	std::cout << "Backwards fibs";
 
 	for(int i=0; i < 30; i++) {
-		cout << i << ": " << fibs[29-i] << "\n";
+		std::cout << i << ": " << fibs->get(29-i) << "\n";
 	}
 }

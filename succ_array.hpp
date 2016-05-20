@@ -6,7 +6,11 @@
 #include "level.hpp"
 
 template <typename Value, typename Measure>
-struct HeteroArrayRest {
+struct HeteroArrayAny {
+};
+
+template <typename Value, typename Measure>
+struct HeteroArrayRest: HeteroArrayAny<Value, Measure> {
   typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
   const std::vector<DeeperNode> rest;
 
@@ -14,25 +18,23 @@ struct HeteroArrayRest {
 };
 
 template <typename Value, typename Measure>
-struct HeteroArrayOne {
+struct HeteroArrayOne: HeteroArrayRest<Value, Measure> {
   typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
   const MeasuredPtr<Measure, Value> slop;
-  const std::vector<DeeperNode> rest;
 
   HeteroArrayOne(const MeasuredPtr<Value, Measure> one, const std::vector<DeeperNode> rest):
-    slop(one), rest(new HeteroArrayRest<Value, Measure>(rest)) {}
+    slop(one), HeteroArrayRest<Value, Measure>(rest) {}
 };
 
 template <typename Value, typename Measure>
-struct HeteroArrayTwo {
+struct HeteroArrayTwo: HeteroArrayRest<Value, Measure> {
   typedef MeasuredPtr<std::shared_ptr<FingerNode<Value, Measure>>, Measure> DeeperNode;
 
   const MeasuredPtr<Measure, Value> slop;
   const MeasuredPtr<Measure, Value> affix;
-  const std::vector<DeeperNode> rest;
 
   HeteroArrayTwo(const MeasuredPtr<Value, Measure> one, const MeasuredPtr<Value, Measure> two, const std::vector<DeeperNode> rest):
-    slop(one), affix(two), rest(rest) {}
+    slop(one), affix(two), HeteroArrayRest<Value, Measure>(rest) {}
 };
 
 template <typename Value, typename Measure>
@@ -60,10 +62,10 @@ class SuccinctArray {
     const ArrayType contents;
     const Bitmask schema;
 
-    SuccinctArray(Bitmask mask, ArrayType *contents): contents(contents), schema(mask) {}
+    SuccinctArray(Bitmask mask, ArrayType *contents): contents(*contents), schema(mask) {}
 
   public:
-    SuccinctArray(void): contents({0}), schema() {}
+    SuccinctArray(void): contents(), schema() {}
 
     const inline SuccinctArray
     append(const SuccinctArray *other) const;
@@ -93,24 +95,24 @@ class SuccinctArray {
     (const bool left, const Value elem) const;
 
     const inline MeasuredPtr<Measure, Value>
-    find(const Measure measure) const;
+    find(const MeasuredPtr<Measure, Value> accum) const;
 };
 
 // Find
 template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
 const inline MeasuredPtr<Measure, Value>
-SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure measure) const {
-  Measure accum = measure;
+SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const MeasuredPtr<Measure, Value> accum) const {
   if(this->schema & 0x1) {
     accum = accum.combine(this->array->one);
   }
-  if(predicate(accum)) {
+  if(accum->checkPredicate()) {
+  	return accum;
     // done
   }
   if(this->schema & 0x2) {
     accum = accum.combine(this->array->two);
   }
-  if(predicate(accum)) {
+  if(accum->predicate(accum)) {
     // done
   }
   const int limit = __builtin_popcount(this->schema >> 2);

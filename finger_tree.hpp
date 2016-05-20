@@ -7,8 +7,8 @@
 
 template <typename Bitmask, typename Measure, typename Value>
 class FingerTree {
-  typedef SuccinctArray<Bitmask, Value> Spine;
-  typedef Level<Bitmask, Value> LevelType;
+  typedef SuccinctArray<Bitmask, Value, HeteroArrayAny<Value, Measure>, Measure> Spine;
+  typedef Level<Bitmask, Value, Measure> LevelType;
 
   private:
     const Spine left;
@@ -17,11 +17,11 @@ class FingerTree {
     FingerTree(const Spine *left, const Spine *right):
       left(*left), right(*right) {}
 
-    const inline FingerTree<Bitmask> *
+    const inline FingerTree<Bitmask, Measure, Value> *
     push(const bool left, const Spine *near,
          const Spine *far, const Value elem) const;
 
-    const inline FingerTree<Bitmask> *
+    const inline FingerTree<Bitmask, Measure, Value> *
     pop(const bool left, const Spine *near, const Spine *far) const;
 
     FingerTree(bool left, const Spine *near, const Spine *far) {
@@ -35,48 +35,47 @@ class FingerTree {
   public:
     FingerTree(void): left(), right() {}
 
-    const FingerTree<Bitmask> *
+    const FingerTree<Bitmask, Measure, Value> *
     pushRight(const Value elem) const {
       return push(true, &this->right, &this->left, elem);
     }
 
-    const FingerTree<Bitmask> *
+    const FingerTree<Bitmask, Measure, Value> *
     popRight(void) const {
       return pop(true, &this->right, &this->left);
     }
 
-    const FingerTree<Bitmask> *
+    const FingerTree<Bitmask, Measure, Value> *
     pushLeft(const Value elem) const {
       return push(true, &this->left, &this->right, elem);
     }
 
-    const FingerTree<Bitmask> *
+    const FingerTree<Bitmask, Measure, Value> *
     popLeft(void) const {
       return pop(true, &this->left, &this->right);
     }
 
     const Value 
-    peekRight() const;
+    peekRight(void) const;
 
     const Value 
-    peekLeft() const;
+    peekLeft(void) const;
 
-    const std::tuple<Value, bool>
-    FingerTree<Bitmask>::find() const {
-      std::pair<Measure, Value> leftRes =
-        left->find(this->combine, predicate, this->identity);
+    const std::tuple<bool, Value>
+    find(const MeasuredPtr<Measure, Value> predicate) const {
+      auto leftRes = left.find(predicate);
 
-      if(predicate(leftRes::get<0>())) {
-        return std::tuple<bool, Value>(true, rightRes::get<1>());
+      if(leftRes.measure != (Value){0}) {
+        return std::tuple<bool, Value>(true, leftRes->value);
       }
 
       std::pair<Measure, Value> rightRes =
-        left->find(this->combine, predicate, leftRes::get<1>());
+        left.find(predicate, std::get<1>(leftRes));
 
-      if(predicate(rightRes::get<0>())) {
-        return std::tuple<bool, Value>(true, rightRes::get<1>());
+      if(predicate(std::get<0>(rightRes)) != nullptr) {
+        return std::tuple<bool, Value>(true, std::get<1>(rightRes));
       } else {
-        return std::tuple<bool, Value>(false, {0});
+        return std::tuple<bool, Value>(false, nullptr);
       }
     }
 };
@@ -84,9 +83,9 @@ class FingerTree {
 //
 // Push
 //
-template <typename Bitmask>
-const inline FingerTree<Bitmask> *
-FingerTree<Bitmask>::push(const bool left, const Spine *near, const Spine *far, const Value elem) const
+template <typename Bitmask, typename Measure, typename Value>
+const inline FingerTree<Bitmask, Measure, Value> *
+FingerTree<Bitmask, Measure, Value>::push(const bool left, const Spine *near, const Spine *far, const Value elem) const
 {
   const int near_state = near->getState(0);
   const int far_state = far->getState(0);
@@ -114,9 +113,9 @@ FingerTree<Bitmask>::push(const bool left, const Spine *near, const Spine *far, 
 //
 // Pop
 //
-template <typename Bitmask>
-const inline FingerTree<Bitmask> *
-FingerTree<Bitmask>::pop(const bool left, const Spine *near, const Spine *far) const
+template <typename Bitmask, typename Measure, typename Value>
+const inline FingerTree<Bitmask, Measure, Value> *
+FingerTree<Bitmask, Measure, Value>::pop(const bool left, const Spine *near, const Spine *far) const
 {
   const int near_state = near->getState(0);
   const int far_state = far->getState(0);
@@ -143,9 +142,9 @@ FingerTree<Bitmask>::pop(const bool left, const Spine *near, const Spine *far) c
 // Peek
 //
 
-template <typename Bitmask>
+template <typename Bitmask, typename Measure, typename Value>
 const inline Value
-FingerTree<Bitmask>::peekLeft(void) const 
+FingerTree<Bitmask, Measure, Value>::peekLeft(void) const 
 {
   const int left_state = this->left.getState(0);
   const int right_state = this->right.getState(0);
@@ -173,7 +172,7 @@ FingerTree<Bitmask>::peekLeft(void) const
       case 2:
         return this->left.contents->slop.value;
       case 3:
-        return ((FingerNode<Value> *)this->left.contents->rest[0]).value;
+        return ((FingerNode<Measure, Value> *)this->left.contents->rest[0])->value;
       default:
         assert(0 && "Should not be reached");
         return {0};
@@ -181,9 +180,9 @@ FingerTree<Bitmask>::peekLeft(void) const
   }
 }
 
-template <typename Bitmask>
+template <typename Bitmask, typename Measure, typename Value>
 const inline Value
-FingerTree<Bitmask>::peekRight(void) const 
+FingerTree<Bitmask, Measure, Value>::peekRight(void) const 
 {
   const int left_state = this->left.getState(0);
   const int right_state = this->right.getState(0);
@@ -210,7 +209,7 @@ FingerTree<Bitmask>::peekRight(void) const
       case 2:
         return this->right.contents->slop.value;
       case 3:
-        return ((FingerNode<Value> *)this->right.contents->rest[0]).value;
+        return ((FingerNode<Measure, Value> *)this->right.contents->rest[0])->value;
       default:
         assert(0 && "Should not be reached");
         return {0};

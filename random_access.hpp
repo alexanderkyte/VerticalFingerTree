@@ -2,53 +2,57 @@
 #define __FINGER_TREE_SEQUENCE_H
 
 #include "finger_tree.hpp"
-#include "measure"
+#include "measure.hpp"
 
-template <typename Value, typename Internal>
-class SequenceLength: Measure<Value> {
+template <typename Value>
+class SequenceLength: MeasuredPtr<size_t, Value> {
 private:
-  const int length;
+  const size_t length;
 
 public:
-  SequenceLength(const int len): length(len);
+  SequenceLength(const int len): length(len) {};
 
-  const inline bool
-  predicate(const Measure<Value> generic_other) const {
-    const auto other = (SequenceLength<Value, Internal>) generic_other;
+  const virtual inline bool
+  predicate(const MeasuredPtr<size_t, Value> generic_other) const override {
+    const auto other = (SequenceLength<Value>) generic_other;
     return other->length <= this->length;
   };
 
-  const inline int 
-  combine(Measure left, Measure right) const {
+  const virtual inline MeasuredPtr<size_t, Value>
+  combine(MeasuredPtr<size_t, Value> left, MeasuredPtr<size_t, Value> right) const override {
     return new SequenceLength(left->length + right->length);
   };
 
-  const inline int
-  measure(Value item) {
+  const virtual inline MeasuredPtr<MeasureType, ValueType>
+  measure(Value item) const override {
     // Every 1-list has length 1
     return new SequenceLength(1);
   };
 
-  const inline int
-  getidentity(void) {
+  const virtual inline SequenceLength<Value>
+  getIdentity(void) const override {
     return new SequenceLength(0);
   };
-}
+};
 
 // This is a random access sequence that uses finger trees
 template <typename Value>
-class PersistentSequence: FingerTree<long long, int, SequenceLength, Value> {
+class PersistentSequence: FingerTree<long, SequenceLength<Value>, Value> {
   public:
-    // Along with pop/push for right and left we have brackets
-    const &Value operator [](int i) const {
-      const SequenceLength thisLong = new SequenceLength(i);
-      MeasuredPtr<SequenceLength, Value> res = this->find(thisLong);
-      if(res::get<0> == i) {
-        return res::get<1>();
+    const Value get(int i) const {
+      SequenceLength<Value> const thisLong = SequenceLength<Value>(i);
+      std::tuple<SequenceLength<Value>, bool> res = this->find(*thisLong);
+      if(std::get<0>(res) == i) {
+        return std::get<1>(res);
       } else {
-        return nullptr;
+        return {0};
       }
     }
-}
+
+    const PersistentSequence<Value> append (Value v) {
+    	return this->pushRight(v);
+    }
+
+};
 
 #endif

@@ -5,22 +5,22 @@
 #include "measure"
 
 template <typename Value, typename Internal>
-class MaxPriority: Measure<Value> {
+class MaxPriority: MeasuredPtr<Value> {
 private:
   const int length;
 
 public:
-  SequenceLength(const int len): length(len);
+  SequenceLength(const size_t len): MeasuredPtr(len);
 
   const inline bool
-  predicate(const Measure<Value> generic_other) const {
-    const auto other = (SequenceLength<Value, Internal>) generic_other;
-    return other->length <= this->length;
+  predicate(const MeasuredPtr<size_t, Value> generic_other) const {
+    const auto other = (MaxPriority<Value, Internal>) generic_other;
+    return other->measure_val <= this->measure_val;
   };
 
   const inline int 
-  combine(Measure left, Measure right) const {
-    return new MaxPriority(max(left->length + right->length);
+  combine(Measure left) const {
+    return new MaxPriority(max(this->meauure_val + left->measure_val);
   };
 
   const inline int

@@ -1,33 +1,9 @@
 #ifndef __FINGER_TREE_LEVEL
 #define __FINGER_TREE_LEVEL
 
-#include <functional>
 #include <vector>
-
-template <typename Type, typename Measure>
-class Measurer {
-  public:
-    const Type identity;
-    const std::function<Measure(Type)> measure;
-    const std::function<Measure(Measure, Measure)> combine;
-
-    Measurer(Type identity, std::function<Measure(Type)> measure,
-      std::function<Measure(Measure, Measure)> combine):
-      identity(identity), measure(measure), combine(combine) {
-#ifdef DEBUG
-      Measure tmp = measure(identity);
-      assert(tmp == combine(tmp, tmp);
-#endif
-    }
-};
-
-template <typename Type, typename Measure>
-class MeasuredPtr { 
-  public:
-    const Measure measure;
-    const Type value;
-};
-
+#include "measure.hpp"
+#include <functional>
 
 template <typename Value, typename Measure>
 class FingerNode {
@@ -40,15 +16,13 @@ class FingerNode {
   public:
    const int level;
 
-   const Measure measure;
+   const MeasuredPtr<Measure, Value> measure;
 
    virtual ~FingerNode(void)  = 0;
 
    const inline
    std::pair<Measure, Value>
-   find(const std::function<Measure(Measure, Measure)> combine,
-        const std::function<bool(Measure)> predicate,
-        const Measure Accum) = 0;
+   find(MeasuredPtr<Measure, Value> query) = 0;
 };
 
 template <typename Value, typename Measure>
@@ -61,9 +35,9 @@ class FingerNodeLeaf: public FingerNode<Value, Measure> {
     const inline
     std::pair<Measure, Value>
     find(const std::function<Measure(Measure, Measure)> combine,
-      const std::function<bool(Measure)> predicate, const Measure accum) const {
+      const std::function<bool(Measure)> predicate, const Measure accum) const override {
 
-      Measure withLeft = accum.combine(left->measure);
+      Measure withLeft = accum.combine(left);
       if(predicate(withLeft)) {
         return left;
       }
@@ -90,7 +64,7 @@ class FingerNodeInner: public FingerNode<Value, Measure> {
     const inline
     std::pair<Measure, Value>
     find(const std::function<Measure(Measure, Measure)> combine,
-      const std::function<bool(Measure)> predicate, const Measure accum) const {
+      const std::function<bool(Measure)> predicate, const Measure accum) const override {
 
       Measure withLeft = accum.combine(left);
       if(predicate(withLeft)) {
