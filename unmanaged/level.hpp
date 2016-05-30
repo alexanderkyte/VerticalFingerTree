@@ -6,6 +6,12 @@
 #include <functional>
 
 template <typename Value, typename Measure>
+struct MeasuredPtr {
+    Value value;
+    Measure measure;
+};
+
+template <typename Value, typename Measure>
 class FingerNode {
 
   private:
@@ -14,15 +20,15 @@ class FingerNode {
       // implement combine logic
 
   public:
-   const int level;
+      const int level;
 
-   const MeasuredPtr<Measure, Value> measure;
+      const MeasuredPtr<Measure, Value> measure;
 
-   virtual ~FingerNode(void)  = 0;
+      virtual ~FingerNode(void)  = 0;
 
-   const inline
-   std::pair<Measure, Value>
-   find(MeasuredPtr<Measure, Value> query) = 0;
+      const inline
+      std::pair<Measure, Value>
+      find(MeasuredPtr<Measure, Value> query) = 0;
 };
 
 template <typename Value, typename Measure>

@@ -5,6 +5,14 @@
 #include <cstring>
 #include "level.hpp"
 
+// Bitmask size calculuation guide
+//
+// Each level at depth n has at most 3 * 3^{n} + 3^{n + 1} nodes. 
+// This simplifies to 2 * 3^{n + 1} nodes. 
+// The summation of the levels up to depth n is 3^{m + 2} - 3.
+// That implies that if you have 4m bits, then you can hold 
+// 3^{m + 2} - 3 items. 
+
 template <typename Value, typename Measure>
 struct HeteroArrayAny {
 };
@@ -95,35 +103,81 @@ class SuccinctArray {
     parallelOverflow
     (const bool left, const Value elem) const;
 
-    const inline Measure 
+    const inline FingerNode<Value, Measure>
     find(const Measure *goal, const Measure *accum) const;
+
+    const inline FingerNode<Value, Measure>
+    findInner 
+    (const FingerNode<Value, Measure> node, const Measure accum, const Measure goal, const int level) const;
 };
+
+template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
+const inline FingerNode<Value, Measure>
+SuccinctArray<Bitmask, Value, ArrayType, Measure>::findInner 
+(const FingerNode<Value, Measure> node, const Measure accum, const Measure goal, const int level) const 
+{
+    Measure prev = accum;
+    FingerNode<Value, Measure> cursor = node;
+
+    // We have a precondition that the answer is in the sub-tree
+
+    for (int i = 0; i < level; i++) {
+        accum = accum.combine(cursor [0]);
+        if (accum >= goal) {
+            cursor = cursor [0];
+            continue;
+        } else {
+            prev = accum;
+        }
+        accum = accum.combine(cursor [1]);
+        if (accum >= goal) {
+            cursor = cursor [1];
+            continue;
+        } else {
+            prev = accum;
+        }
+        accum = accum.combine(cursor [2]);
+        if (accum >= goal) {
+            cursor = cursor [2];
+            continue;
+        } else {
+            throw new std::exception("Shouldn't reach this. This implies that a node was searched when we didn't know an answer was internal.");
+        }
+    }
+    // We should have reached the last level, and so should
+    // have found the right leaf. 
+
+    return cursor
+}
 
 // Find
 template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
-const inline Measure 
-SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure *goal, const Measure *accum) const {
-  if(this->schema & 0x1) {
-    accum = accum->combine(this->array->one);
-  }
-  if(accum->predicate()) {
-       return this->contents->one->find(goal);
-  }
-  if(this->schema & 0x2) {
-    accum = accum->combine(this->array->two);
-  }
-  if(accum->predicate(accum)) {
-       return this->contents->two->find(goal);
-  }
+const inline FingerNode<Value, Measure>
+SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure goal) const {
+    Measure accum = Measurer.getIdentity();
+    Measure prev = accum;
+    if(this->schema & 0x1
+        accum = accum.combine(this->oneSlop.Measure);
 
-  const int limit = __builtin_popcount(this->schema >> 2);
+    if(accum >= goal
+        return findInner(this->oneSlop, prev, goal);
+    
+    if(this->schema & 0x2)
+        prev = accum;
+        accum = accum.combine(this->oneSlop.Measure);
 
-  for(int i=0; i < limit; i++) {
-    accum = accum->combine(this->contents[i]);
-    if(predicate(accum)) {
-      return this->contents[i]->find(goal);
-    } 
-  }
+    if(accum >= goal)
+        return findInner(this->twoSlop, prev, goal);
+
+    const int limit = __builtin_popcount(this->schema >> 2);
+
+    for(int i=0; i < limit; i++) {
+        prev = goal;
+        accum = accum->combine(this->contents[i]);
+        if(goal <= accum) {
+            return findInner(this->contents[i], prev);
+        } 
+    }
 }
 
 //template <typename Bitmask, typename Value>
