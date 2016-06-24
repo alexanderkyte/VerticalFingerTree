@@ -63,8 +63,8 @@ class FingerTree {
     peekLeft(void) const;
 
     const std::tuple<bool, Value>
-    find(const Measure *goal) const {
-      Measure start = goal->getIdentity();
+    find(const Measure goal) const {
+      Measure start = Measurer::getIdentity();
       auto leftRes = left.find(goal, start);
 
       if(leftRes.value != (Value){0}) {

@@ -103,63 +103,62 @@ class SuccinctArray {
     parallelOverflow
     (const bool left, const Value elem) const;
 
-    const inline FingerNode<Value, Measure>
-    find(const Measure *goal, const Measure *accum) const;
+    const inline FingerNode<Value, Measure> *
+    find
+    (const Measure goal, const Measure accum) const;
 
-    const inline FingerNode<Value, Measure>
+    const inline FingerNode<Value, Measure> *
     findInner 
-    (const FingerNode<Value, Measure> node, const Measure accum, const Measure goal, const int level) const;
+    (const FingerNode<Value, Measure> *node, const Measure accum, const Measure goal, const int level) const;
 };
 
 template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
-const inline FingerNode<Value, Measure>
+const inline FingerNode<Value, Measure> *
 SuccinctArray<Bitmask, Value, ArrayType, Measure>::findInner 
-(const FingerNode<Value, Measure> node, const Measure accum, const Measure goal, const int level) const 
+(const FingerNode<Value, Measure> *node, const Measure accum, const Measure goal, const int level) const 
 {
     Measure prev = accum;
-    FingerNode<Value, Measure> cursor = node;
+    FingerNode<Value, Measure> cursor = *node;
 
     // We have a precondition that the answer is in the sub-tree
 
     for (int i = 0; i < level; i++) {
-        accum = accum.combine(cursor [0]);
+        accum = accum.combine(cursor.left);
         if (accum >= goal) {
             cursor = cursor [0];
             continue;
         } else {
             prev = accum;
         }
-        accum = accum.combine(cursor [1]);
+        accum = accum.combine(cursor.middle);
         if (accum >= goal) {
             cursor = cursor [1];
             continue;
         } else {
             prev = accum;
         }
-        accum = accum.combine(cursor [2]);
+        accum = accum.combine(cursor.right);
         if (accum >= goal) {
             cursor = cursor [2];
             continue;
         } else {
-            throw new std::exception("Shouldn't reach this. This implies that a node was searched when we didn't know an answer was internal.");
+            throw new std::range_error("Shouldn't reach this. This implies that a node was searched when we didn't know an answer was internal.");
         }
     }
     // We should have reached the last level, and so should
     // have found the right leaf. 
-
-    return cursor
+    return cursor;
 }
 
 // Find
 template <typename Bitmask, typename Value, typename ArrayType, typename Measure>
-const inline FingerNode<Value, Measure>
-SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure goal) const {
-    Measure accum = Measurer.getIdentity();
+const inline FingerNode<Value, Measure> *
+SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure goal, const Measure accum) const {
     Measure prev = accum;
-    if(this->schema & 0x1
+    if(this->schema & 0x1)
         accum = accum.combine(this->oneSlop.Measure);
 
-    if(accum >= goal
+    if(accum >= goal)
         return findInner(this->oneSlop, prev, goal);
     
     if(this->schema & 0x2)

@@ -32,13 +32,12 @@ Level	level.hpp	/^    Level(const int state, const Value affix, const Value slop
 Level	level.hpp	/^class Level {$/;"	c
 LevelType	finger_tree.hpp	/^  typedef Level<Bitmask, Value, Measure> LevelType;$/;"	t	class:FingerTree
 LevelType	succ_array.hpp	/^  typedef Level<Bitmask, Value, Measure> LevelType;$/;"	t	class:SuccinctArray
-MaxPriority	priority_queue.hpp	/^class MaxPriority: Measure<Value> {$/;"	c
-MeasuredPtr	measure.hpp	/^  const MeasuredPtr(const ValueType value): $/;"	f	class:MeasuredPtr
-MeasuredPtr	measure.hpp	/^class MeasuredPtr {$/;"	c
+MaxPriority	priority_queue.hpp	/^class MaxPriority: MeasuredPtr<Value> {$/;"	c
+MeasuredPtr	level.hpp	/^struct MeasuredPtr {$/;"	s
+Measurer	measure.hpp	/^class Measurer {$/;"	c
 PersistentSequence	priority_queue.hpp	/^class PersistentSequence: FingerTree<long long, int, SequenceLength, Value> {$/;"	c
-PersistentSequence	random_access.hpp	/^class PersistentSequence: FingerTree<long, SequenceLength<Value>, Value> {$/;"	c
-SequenceLength	random_access.hpp	/^  SequenceLength(const int len): length(len) {};$/;"	f	class:SequenceLength
-SequenceLength	random_access.hpp	/^class SequenceLength: Measure<Value> {$/;"	c
+PersistentSequence	random_access.hpp	/^class PersistentSequence: FingerTree<long, size_t, Value, SequenceLength<Value>> {$/;"	c
+SequenceLength	random_access.hpp	/^class SequenceLength: public Measurer<size_t, Value> {$/;"	c
 Spine	finger_tree.hpp	/^  typedef SuccinctArray<Bitmask, Value, HeteroArrayAny<Value, Measure>, Measure> Spine;$/;"	t	class:FingerTree
 SuccinctArray	succ_array.hpp	/^    SuccinctArray(Bitmask mask, ArrayType *contents): contents(*contents), schema(mask) {}$/;"	f	class:SuccinctArray
 SuccinctArray	succ_array.hpp	/^    SuccinctArray(void): contents(), schema() {}$/;"	f	class:SuccinctArray
@@ -57,13 +56,14 @@ append	random_access.hpp	/^    const PersistentSequence<Value> append (Value v) 
 append	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::append(const SuccinctArray *other) const {$/;"	f	class:SuccinctArray
 bitmaskFor	bitmask.hpp	/^constexpr Bitmask bitmaskFor(const int state) {$/;"	f
 bitmaskFor	succ_array.hpp	/^constexpr Bitmask bitmaskFor(const int state) {$/;"	f
-combine	priority_queue.hpp	/^  combine(Measure left, Measure right) const {$/;"	f	class:MaxPriority
+combine	priority_queue.hpp	/^  combine(Measure left) const {$/;"	f	class:MaxPriority
 contents	succ_array.hpp	/^    const ArrayType contents;$/;"	m	class:SuccinctArray
-find	finger_tree.hpp	/^    find(const Measure predicate) const {$/;"	f	class:FingerTree
-find	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure accum) const {$/;"	f	class:SuccinctArray
+find	finger_tree.hpp	/^    find(const Measure *goal) const {$/;"	f	class:FingerTree
+find	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::find(const Measure goal, const Measure accum) const {$/;"	f	class:SuccinctArray
+findInner	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::findInner $/;"	f	class:SuccinctArray
 footprint	bitmask.hpp	/^constexpr int footprint(const int state) {$/;"	f
 footprint	succ_array.hpp	/^constexpr int footprint(const int state) {$/;"	f
-get	random_access.hpp	/^    const Value get(int i) const {$/;"	f	class:PersistentSequence
+get	random_access.hpp	/^    const Value get(size_t i) const {$/;"	f	class:PersistentSequence
 getLevel	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::getLevel(int level, int state) const {$/;"	f	class:SuccinctArray
 getState	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::getState(int level) const {$/;"	f	class:SuccinctArray
 getidentity	priority_queue.hpp	/^  getidentity(void) {$/;"	f	class:MaxPriority
@@ -71,13 +71,13 @@ left	finger_tree.hpp	/^    const Spine left;$/;"	m	class:FingerTree
 left	level.hpp	/^    const Element left;$/;"	m	class:FingerNodeInner
 left	level.hpp	/^    const MeasuredPtr<Measure, Value> left;$/;"	m	class:FingerNodeLeaf
 length	priority_queue.hpp	/^  const int length;$/;"	m	class:MaxPriority
-length	random_access.hpp	/^  const int length;$/;"	m	class:SequenceLength
-level	level.hpp	/^   const int level;$/;"	m	class:FingerNode
+level	level.hpp	/^      const int level;$/;"	m	class:FingerNode
 main	random_access_test.cpp	/^int main(void) {$/;"	f
 main	test.cpp	/^main(void) $/;"	f
 mask	level.hpp	/^    mask(void) const {$/;"	f	class:Level
-measure	level.hpp	/^   const MeasuredPtr measure;$/;"	m	class:FingerNode
-measure	measure.hpp	/^  const MeasureType measure;$/;"	m	class:MeasuredPtr
+measure	finger_tree.hpp	/^    const Measurer measure;$/;"	m	class:FingerTree
+measure	level.hpp	/^      const MeasuredPtr<Measure, Value> measure;$/;"	m	class:FingerNode
+measure	level.hpp	/^    Measure measure;$/;"	m	struct:MeasuredPtr
 measure	priority_queue.hpp	/^  measure(Value item) {$/;"	f	class:MaxPriority
 middle	level.hpp	/^    const Element middle;$/;"	m	class:FingerNodeInner
 middle	level.hpp	/^    const MeasuredPtr<Measure, Value> middle;$/;"	m	class:FingerNodeLeaf
@@ -88,18 +88,18 @@ one_affix	succ_array.hpp	/^#undef one_affix$/;"	d
 operator []	priority_queue.hpp	/^    const &Value operator [](int i) const {$/;"	f	class:PersistentSequence
 parallelOverflow	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::parallelOverflow$/;"	f	class:SuccinctArray
 parallelUnderflow	succ_array.hpp	/^SuccinctArray<Bitmask, Value, ArrayType, Measure>::parallelUnderflow$/;"	f	class:SuccinctArray
-peekLeft	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value>::peekLeft(void) const $/;"	f	class:FingerTree
-peekRight	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value>::peekRight(void) const $/;"	f	class:FingerTree
-pop	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value>::pop(const bool left, const Spine *near, const Spine *far) const$/;"	f	class:FingerTree
+peekLeft	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value, Measurer>::peekLeft(void) const $/;"	f	class:FingerTree
+peekRight	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value, Measurer>::peekRight(void) const $/;"	f	class:FingerTree
+pop	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value, Measurer>::pop(const bool left, const Spine *near, const Spine *far) const$/;"	f	class:FingerTree
 popLeft	finger_tree.hpp	/^    popLeft(void) const {$/;"	f	class:FingerTree
 popRight	finger_tree.hpp	/^    popRight(void) const {$/;"	f	class:FingerTree
-predicate	priority_queue.hpp	/^  predicate(const Measure<Value> generic_other) const {$/;"	f	class:MaxPriority
+predicate	priority_queue.hpp	/^  predicate(const MeasuredPtr<size_t, Value> generic_other) const {$/;"	f	class:MaxPriority
 priority	priority_queue.hpp	/^Measure tree to get max priority, then measure the tree to$/;"	v	typeref:class:MaxPriority
-push	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value>::push(const bool left, const Spine *near, const Spine *far, const Value elem) const$/;"	f	class:FingerTree
+push	finger_tree.hpp	/^FingerTree<Bitmask, Measure, Value, Measurer>::push(const bool left, const Spine *near, const Spine *far, const Value elem) const$/;"	f	class:FingerTree
 pushFingerInt	test.cpp	/^pushFingerInt(void)$/;"	f
 pushLeft	finger_tree.hpp	/^    pushLeft(const Value elem) const {$/;"	f	class:FingerTree
 pushRight	finger_tree.hpp	/^    pushRight(const Value elem) const {$/;"	f	class:FingerTree
-query	level.hpp	/^   find(MeasuredPtr query) = 0;$/;"	m	class:FingerNode
+query	level.hpp	/^      find(MeasuredPtr<Measure, Value> query) = 0;$/;"	m	class:FingerNode
 remove	level.hpp	/^    remove(bool left) const {$/;"	f	class:Level
 rest	succ_array.hpp	/^  const std::vector<DeeperNode> rest;$/;"	m	struct:HeteroArrayRest
 right	finger_tree.hpp	/^    const Spine right;$/;"	m	class:FingerTree
@@ -125,4 +125,4 @@ three_affix	bitmask.hpp	/^#define three_affix /;"	d
 three_affix	bitmask.hpp	/^#undef three_affix$/;"	d
 three_affix	succ_array.hpp	/^#define three_affix /;"	d
 three_affix	succ_array.hpp	/^#undef three_affix$/;"	d
-value	measure.hpp	/^  const ValueType value;$/;"	m	class:MeasuredPtr
+value	level.hpp	/^    Value value;$/;"	m	struct:MeasuredPtr

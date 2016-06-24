@@ -21,70 +21,31 @@ class FingerNode {
 
   public:
       const int level;
+      const Value value;
+      const Measure measure;
 
-      const MeasuredPtr<Measure, Value> measure;
+      FingerNode(Value value, Measure measure):
+      value(value), measure(measure)
+      {};
 
-      virtual ~FingerNode(void)  = 0;
-
-      const inline
-      std::pair<Measure, Value>
-      find(MeasuredPtr<Measure, Value> query) = 0;
+      virtual ~FingerNode(void) = 0;
 };
 
 template <typename Value, typename Measure>
 class FingerNodeLeaf: public FingerNode<Value, Measure> {
   public:
-    const MeasuredPtr<Measure, Value> left;
-    const MeasuredPtr<Measure, Value> middle;
-    const MeasuredPtr<Measure, Value> right;
-
-    const inline
-    std::pair<Measure, Value>
-    find(const std::function<Measure(Measure, Measure)> combine,
-      const std::function<bool(Measure)> predicate, const Measure accum) const override {
-
-      Measure withLeft = accum.combine(left);
-      if(predicate(withLeft)) {
-        return left;
-      }
-      Measure withMiddle = withLeft.combine(middle->measure);
-      if(predicate(withMiddle)) {
-        return middle;
-      }
-      Measure withRight = withMiddle.combine(right->measure);
-      if(predicate(withRight)) {
-        return right;
-      }
-    }
+    const Value left;
+    const Value middle;
+    const Value right;
 };
 
 template <typename Value, typename Measure>
 class FingerNodeInner: public FingerNode<Value, Measure> {
 	typedef MeasuredPtr<Measure, std::shared_ptr<FingerNode<Value, Measure>>> Element;
-
   public:
-    const Element left;
-    const Element middle;
-    const Element right;
-
-    const inline
-    std::pair<Measure, Value>
-    find(const std::function<Measure(Measure, Measure)> combine,
-      const std::function<bool(Measure)> predicate, const Measure accum) const override {
-
-      Measure withLeft = accum.combine(left);
-      if(predicate(withLeft)) {
-        return find(left);
-      }
-      Measure withMiddle = withLeft.combine(middle);
-      if(predicate(withMiddle)) {
-        return find(middle);
-      }
-      Measure withRight = withMiddle.combine(right);
-      if(predicate(withRight)) {
-        return find(right);
-      }
-    }
+    const std::shared_ptr<FingerNode<Measure, Value>> left;
+    const std::shared_ptr<FingerNode<Measure, Value>> middle;
+    const std::shared_ptr<FingerNode<Measure, Value>> right;
 };
 
 template <typename Bitmask, typename Value, typename Measure>

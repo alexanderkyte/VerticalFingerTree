@@ -4,14 +4,14 @@
 template <typename MeasureType, typename ValueType>
 class Measurer {
 public:
-  const virtual inline MeasureType 
-  combine(const MeasureType left, const MeasureType right) const = 0;
+  const static inline MeasureType 
+  combine(const MeasureType left, const MeasureType right);
 
-  const virtual inline MeasureType
-  measure(ValueType item) const = 0;
+  const static inline MeasureType
+  measure(ValueType item);
 
-  const virtual inline MeasureType
-  getIdentity(void) const = 0;
+  const static inline MeasureType
+  getIdentity(void);
 };
 
 #endif
