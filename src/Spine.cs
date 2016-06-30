@@ -45,7 +45,7 @@ namespace FingerTree {
 
 		MeasuredPtr<Value, Measure> oneSlop;
 		MeasuredPtr<Value, Measure> twoSlop;
-		readonly Node<Value, Measure> [] values;
+		readonly MeasuredPtr<Node<Value, Measure>, Measure> [] values;
 
 		readonly Bitmask schema;
 
