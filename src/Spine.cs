@@ -1,14 +1,32 @@
+#define CHECKED // Whether to put pattern matches in try/catch
+
+#define SMALL_MASK
+
+using System;
+
+#if SMALL_MASK
+		using Bitmask = System.Int32;
+#else
+		using Bitmask = System.Int64;
+#endif
 
 namespace FingerTree {
 
-	public struct Node<Value, Measure>
+	public struct MeasuredPtr<Value, Measure>
 	{
-		public readonly MeasuredPtr<Value, Measure> near;
-		public readonly MeasuredPtr<Value, Measure> mid;
-		public readonly MeasuredPtr<Value, Measure> far;
+		Value v;
+		Measure m;
+	}
 
-		public Node (MeasuredPtr<Value, Measure> near,
-			MeasuredPtr<Value, Measure> mid, MeasuredPtr<Value, Measure> far) 
+
+	public class Node<Value, Measure>
+	{
+		public readonly Node<Value, Measure> near;
+		public readonly Node<Value, Measure> mid;
+		public readonly Node<Value, Measure> far;
+
+		public Node (Node<Value, Measure> near,
+			Node<Value, Measure> mid, Node<Value, Measure> far) 
 		{
 			this.near = near;
 			this.mid = mid;
@@ -16,18 +34,18 @@ namespace FingerTree {
 		}
 	}
 
-	public class Spine<Bitmask, Content>
+	public class Spine<Value, Measure>
 	{
-		const Bitmask ROW_ONE = 0x1;
-		const Bitmask ROW_TWO = 0x3;
-		const Bitmask ROW_THREE = 0x7;
-		const Bitmask ROW_FOUR = 0xf;
+		Bitmask ROW_ONE = 0x1;
+		Bitmask ROW_TWO = 0x3;
+		Bitmask ROW_THREE = 0x7;
+		Bitmask ROW_FOUR = 0xf;
 
-		const Bitmask LOWER_ROW_MASK = 0xf;
+		Bitmask LOWER_ROW_MASK = 0xf;
 
-		Content oneSlop;
-		Content twoSlop;
-		readonly Content[] values;
+		MeasuredPtr<Value, Measure> oneSlop;
+		MeasuredPtr<Value, Measure> twoSlop;
+		readonly Node<Value, Measure> [] values;
 
 		readonly Bitmask schema;
 
@@ -35,22 +53,26 @@ namespace FingerTree {
 		// node. Therefore our transition bitmask is the
 		// state bitmask for 1, repeated for the number of 
 		// rows.
-#if FINGER_TREE_32_BIT
+#if SMALL_MASK
 		static readonly Bitmask UnderflowStripeCache = 0x11111111;
 #else
 		static readonly Bitmask UnderflowStripeCache = 0x1111111111111111;
 #endif
 
-#if FINGER_TREE_32_BIT
+#if SMALL_MASK
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int 
 		HammingWeight(int mask)
 		{
+			throw new Exception("Implement me");
 			value = value - ((value >> 1) & 0x55555555);
 			value = (value & 0x33333333) + ((value >> 2) & 0x33333333);
 			return (((value + (value >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int CountTrailingZeros(int i) {
+			throw new Exception("Implement me");
 			// HD, Figure 5-14
 			if (i == 0) return 32;
 
@@ -60,11 +82,12 @@ namespace FingerTree {
 			y = i << 8;  if (y != 0) { n = n - 8; i = y; }
 			y = i << 4;  if (y != 0) { n = n - 4; i = y; }
 			y = i << 2;  if (y != 0) { n = n - 2; i = y; }
-			return n - ((i << 1) >>> 31);
+			return n - ((i << 1) >> 31);
 		}
 #else
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int 
-		HammingWeight(int64 mask)
+		HammingWeight(Int64 mask)
 		{
 			throw new Exception("Implement me");
 			return -1;
@@ -165,47 +188,60 @@ namespace FingerTree {
 			Bitmask newUpperBitmask = this.schema & ((~0x0) << numOverflow);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Spine<Value, Measure>
-		push (MeasuredPtr pushed) 
+		push (MeasuredPtr<Value, Measure> pushed) 
 		{
 			switch (this.schema & this.HeadMask)
 			{
-				case zeroMask;
-					return new Spine<Value, Measure> (pushed, null, rest);
-				case oneMask:
-					return new Spine<Value, Measure> (pushed, this.OneSlop, rest);
-				case twoMask:
-					return new Spine<Value, Measure> (, , rest);
-				case threeMask:
-				case fourMask:
-					return this.overflow();
+				//case zeroMask:
+					//return new Spine<Value, Measure> (pushed, null, rest);
+				//case oneMask:
+					//return new Spine<Value, Measure> (pushed, this.OneSlop, rest);
+				//case twoMask:
+					//return new Spine<Value, Measure> (, , rest);
+				//case threeMask:
+					//return new Spine<Value, Measure> (, , rest);
+				//case fourMask:
+					//return this.overflow();
 			}
+#if CHECKED
 			throw new Exception ("Nonexhaustive match");
+#else
+			return;
+#endif
 		}
 
 		// Visual metaphor: one slop near you, two slop one farther, rest on far side
 		// Always inline!
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Spine<Value, Measure>
 		pop () 
 		{
-			switch (this.schema & this.HeadMask)
-			{
-				case OneMask:
-					// Returns null for empty Spine
-					this.underflow ();
-				case twoMask:
-					return new Spine<Value, Measure> (this.twoSlop, null, rest);
-				case threeMask:
-					var head = this.rest [0];
-					// Pop off the nearest
-					return new Spine<Value, Measure> (head.mid, head.far, rest);
-				case fourMask:
-					return new Spine<Value, Measure> (null, null, rest);
-			}
+			//switch (this.schema & this.HeadMask)
+			//{
+				//case OneMask:
+					//// Returns null for empty Spine
+					//this.underflow ();
+				//case twoMask:
+					//return new Spine<Value, Measure> (this.twoSlop, null, rest);
+				//case threeMask:
+					//var head = this.rest [0];
+					//// Pop off the nearest
+					//return new Spine<Value, Measure> (head.mid, head.far, rest);
+				//case fourMask:
+					//return new Spine<Value, Measure> (null, null, rest);
+			//}
+#if CHECKED
+			throw new Exception ("Nonexhaustive match");
+#else
+			return;
+#endif
 		}
 
 		// Visual metaphor: one slop near you, two slop one farther, rest on far side
 		// Useful for concatenating two Finger Trees
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Spine<Value, Measure>
 		reverse () 
 		{
@@ -219,6 +255,7 @@ namespace FingerTree {
 			//}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Spine<Value, Measure>
 		pushTopFromInside () 
 		{
@@ -231,39 +268,40 @@ namespace FingerTree {
 				//case fourMask:
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		char offsetFrom (char index) 
 		{
 			char offset = 0;
 			for (int i =0 ; i < index; i++) 
-				if index & (0x1 << (i-1))
+				if (index & (0x1 << (i-1)))
 					offset++;
 		}
 
-		public Value
-		indexValueMask (int index) {
-			int n = offsetFrom (index);
-			switch (n) {
-				case 0:
-					return oneSlopVal:
-				case 1:
-					return oneSlopVal:
-				default:
-				return values[n - 2];
-			}
-		}
+		//public Value
+		//indexValueMask (int index) {
+			//int n = offsetFrom (index);
+			//switch (n) {
+				//case 0:
+					//return oneSlopVal;
+				//case 1:
+					//return oneSlopVal;
+				//default:
+				//return values[n - 2];
+			//}
+		//}
 
-		public Measure
-		indexMeasureMask (int index) {
-			int n = offsetFrom (index);
-			switch (n) {
-				case 0:
-					return oneSlopVal:
-				case 1:
-					return oneSlopVal:
-				default:
-				return measure[n - 2];
-			}
-		}
+		//public Measure
+		//indexMeasureMask (int index) {
+			//int n = offsetFrom (index);
+			//switch (n) {
+				//case 0:
+					//return oneSlopVal;
+				//case 1:
+					//return oneSlopVal;
+				//default:
+				//return measure[n - 2];
+			//}
+		//}
 	}
 
 }
